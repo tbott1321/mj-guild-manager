@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ Guild Manager - Import</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 680px;
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 24px 50px rgba(0,0,0,0.22);
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 30px;
+            color: #111827;
+        }
+
+        p {
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .upload-box {
+            margin: 22px 0;
+            padding: 24px;
+            border: 2px dashed #c7d2fe;
+            background: #f8faff;
+            border-radius: 18px;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 12px;
+            background: white;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        button, a {
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 13px 18px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: white;
+        }
+
+        a {
+            background: #eef2ff;
+            color: #4338ca;
+        }
+
+        .hint {
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 14px;
+            background: #f3f4f6;
+            color: #4b5563;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Weekly Guild Import</h2>
+        <p>
+            Upload your weekly guild export here. This importer is set up for your
+            consistent spreadsheet layout and uses <strong>User ID</strong> as the match key.
+        </p>
+
+        <form action="/import" method="post" enctype="multipart/form-data">
+            <div class="upload-box">
+                <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
+            </div>
+
+            <div class="buttons">
+                <button type="submit">Upload Spreadsheet</button>
+                <a href="/dashboard?role=admin">Back to Dashboard</a>
+            </div>
+        </form>
+
+        <div class="hint">
+            Expected columns:<br>
+            <strong>Name</strong>, <strong>Nickname</strong>, <strong>User ID</strong>,
+            <strong>Rank</strong>, <strong>Might</strong>, <strong>Kills</strong>,
+            <strong>Enemies Destroyed Might</strong>
+        </div>
+    </div>
+</body>
+</html>

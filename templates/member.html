@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ Guild Manager - Member</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .topbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+        }
+        .title { font-size: 26px; font-weight: 700; }
+        .back {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .container { max-width: 1000px; margin: 24px auto; padding: 0 20px 24px; }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            margin-bottom: 24px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .item {
+            background: #f9fafb;
+            border-radius: 16px;
+            padding: 16px;
+        }
+        .label { color: #6b7280; font-size: 13px; margin-bottom: 6px; }
+        .value { font-size: 20px; font-weight: 700; }
+        .pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .comments-box {
+            background: #f9fafb;
+            border-radius: 16px;
+            padding: 18px;
+            white-space: pre-wrap;
+            color: #374151;
+            line-height: 1.6;
+            min-height: 80px;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: #111827;
+            color: white;
+            text-align: left;
+            padding: 14px;
+            font-size: 14px;
+        }
+        td {
+            padding: 14px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+        .empty {
+            padding: 18px;
+            background: #f9fafb;
+            border-radius: 14px;
+            color: #6b7280;
+        }
+        .button {
+            display: inline-block;
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: white;
+        }
+
+        @media (max-width: 900px) {
+            .grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 760px) {
+            .grid { grid-template-columns: 1fr; }
+            .topbar-inner { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Member Profile</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2 style="margin-top: 0;">{{ member.name }}</h2>
+            <div style="margin-bottom: 18px;">
+                <span class="pill">{{ member.rank or "R1" }}</span>
+            </div>
+
+            <div class="grid">
+                {% if is_admin %}
+                <div class="item">
+                    <div class="label">User ID</div>
+                    <div class="value">{{ member.igg_id }}</div>
+                </div>
+                {% endif %}
+                <div class="item">
+                    <div class="label">Might</div>
+                    <div class="value">{{ "{:,}".format(member.might or 0) }}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Kills</div>
+                    <div class="value">{{ "{:,}".format(member.kills or 0) }}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Enemy Destroyed Might</div>
+                    <div class="value">{{ "{:,}".format(member.edm or 0) }}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Mana</div>
+                    <div class="value">{{ member.mana or 0 }}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Sigils</div>
+                    <div class="value">{{ "{:,}".format(member.sigils or 0) }}</div>
+                </div>
+            </div>
+        </div>
+
+        {% if is_admin %}
+        <div class="card">
+            <h2 style="margin-top: 0;">Comments</h2>
+            <div class="comments-box">{{ member.comments or "No comments saved for this player." }}</div>
+
+            <div style="margin-top: 18px;">
+                <a class="button" href="/member/{{ member.igg_id }}/edit">Edit Player</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <h2 style="margin-top: 0;">Name Change History</h2>
+
+            {% if history|length == 0 %}
+                <div class="empty">No name changes have been logged for this member.</div>
+            {% else %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Old Name</th>
+                            <th>New Name</th>
+                            <th>Changed At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in history %}
+                        <tr>
+                            <td>{{ h.old_name }}</td>
+                            <td>{{ h.new_name }}</td>
+                            <td>{{ h.changed_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
