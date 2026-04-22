@@ -95,17 +95,6 @@ def init_db():
     if not column_exists(conn, "members", "discord_username"):
         c.execute("ALTER TABLE members ADD COLUMN discord_username TEXT DEFAULT ''")
 
-    if column_exists(conn, "members", "communication_username") and not column_exists(conn, "members", "discord_username_old_migrated_flag_dummy"):
-        # Best-effort migration from old single username field
-        c.execute("""
-            UPDATE members
-            SET discord_username = COALESCE(discord_username, communication_username)
-            WHERE (discord_username IS NULL OR TRIM(discord_username) = '')
-              AND communication_method IN ('Discord', 'Both')
-              AND communication_username IS NOT NULL
-              AND TRIM(communication_username) != ''
-        """)
-
     if not column_exists(conn, "members", "created_at"):
         c.execute("ALTER TABLE members ADD COLUMN created_at TEXT")
 

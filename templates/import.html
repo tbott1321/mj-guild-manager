@@ -12,112 +12,203 @@
 
         body {
             margin: 0;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-
-        .card {
-            width: 100%;
-            max-width: 680px;
-            background: white;
-            border-radius: 24px;
-            padding: 32px;
-            box-shadow: 0 24px 50px rgba(0,0,0,0.22);
-        }
-
-        h2 {
-            margin-top: 0;
-            font-size: 30px;
+            background: #f3f4f6;
             color: #111827;
         }
 
-        p {
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .topbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 26px;
+            font-weight: 700;
+        }
+
+        .back {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 24px auto;
+            padding: 0 20px 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            margin-bottom: 24px;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 24px;
+        }
+
+        .muted {
             color: #6b7280;
             line-height: 1.6;
         }
 
         .upload-box {
-            margin: 22px 0;
-            padding: 24px;
-            border: 2px dashed #c7d2fe;
-            background: #f8faff;
+            border: 2px dashed #cbd5e1;
             border-radius: 18px;
+            padding: 24px;
+            background: #f8fafc;
+            margin-top: 18px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 8px;
+            font-weight: 600;
         }
 
         input[type="file"] {
             width: 100%;
             padding: 12px;
+            border-radius: 12px;
             border: 1px solid #d1d5db;
-            border-radius: 12px;
             background: white;
-        }
-
-        .buttons {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-top: 18px;
-        }
-
-        button, a {
-            text-decoration: none;
-            border: none;
-            border-radius: 12px;
-            padding: 13px 18px;
-            font-weight: 600;
-            cursor: pointer;
             font-size: 14px;
         }
 
-        button {
+        .actions {
+            margin-top: 18px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .button, .link-button {
+            display: inline-block;
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .button {
             background: linear-gradient(135deg, #6366f1, #7c3aed);
             color: white;
         }
 
-        a {
+        .link-button {
             background: #eef2ff;
             color: #4338ca;
         }
 
-        .hint {
-            margin-top: 18px;
-            padding: 14px;
+        .columns-list {
+            margin: 14px 0 0;
+            padding-left: 18px;
+            color: #374151;
+            line-height: 1.8;
+        }
+
+        .note {
+            margin-top: 16px;
+            padding: 14px 16px;
             border-radius: 14px;
-            background: #f3f4f6;
-            color: #4b5563;
+            background: #eff6ff;
+            color: #1e3a8a;
             font-size: 14px;
-            line-height: 1.7;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 760px) {
+            .topbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .actions .button,
+            .actions .link-button {
+                width: 100%;
+                text-align: center;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>Weekly Guild Import</h2>
-        <p>
-            Upload your weekly guild export here. This importer is set up for your
-            consistent spreadsheet layout and uses <strong>User ID</strong> as the match key.
-        </p>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Weekly Import</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
 
-        <form action="/import" method="post" enctype="multipart/form-data">
+    <div class="container">
+        <div class="card">
+            <h2>Import Guild Spreadsheet</h2>
+            <div class="muted">
+                Upload your weekly guild spreadsheet to update member records.
+                Existing players will be updated, renamed players will be logged in name history,
+                and new players will be added automatically.
+            </div>
+
             <div class="upload-box">
-                <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
+                <form action="/import" method="post" enctype="multipart/form-data">
+                    <label for="file">Select Excel or CSV file</label>
+                    <input id="file" name="file" type="file" accept=".xlsx,.xls,.csv" required>
+
+                    <div class="actions">
+                        <button class="button" type="submit">Import File</button>
+                        <a class="link-button" href="/">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Required Columns</h2>
+            <div class="muted">
+                The spreadsheet layout should include these exact column headers:
             </div>
 
-            <div class="buttons">
-                <button type="submit">Upload Spreadsheet</button>
-                <a href="/dashboard?role=admin">Back to Dashboard</a>
-            </div>
-        </form>
+            <ul class="columns-list">
+                <li>Name</li>
+                <li>User ID</li>
+                <li>Rank</li>
+                <li>Might</li>
+                <li>Kills</li>
+                <li>Enemies Destroyed Might</li>
+            </ul>
 
-        <div class="hint">
-            Expected columns:<br>
-            <strong>Name</strong>, <strong>Nickname</strong>, <strong>User ID</strong>,
-            <strong>Rank</strong>, <strong>Might</strong>, <strong>Kills</strong>,
-            <strong>Enemies Destroyed Might</strong>
+            <div class="note">
+                The import will keep admin-only profile fields already stored in the app, such as
+                Mana, Sigils, Alt Account, Troop Comp, Communication details, and Comments.
+                It only updates the fields coming from the weekly spreadsheet unless the player is brand new.
+            </div>
         </div>
     </div>
 </body>
