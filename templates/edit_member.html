@@ -96,6 +96,18 @@
             background: #f3f4f6;
         }
 
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-top: 32px;
+        }
+
+        .checkbox-row input {
+            width: auto;
+            margin: 0;
+        }
+
         .actions {
             margin-top: 20px;
             display: flex;
@@ -126,6 +138,10 @@
         @media (max-width: 760px) {
             .grid {
                 grid-template-columns: 1fr;
+            }
+
+            .checkbox-row {
+                padding-top: 0;
             }
 
             .topbar-inner {
@@ -199,6 +215,35 @@
                     <div>
                         <label>Sigils</label>
                         <input type="number" min="0" name="sigils" value="{{ member.sigils or 0 }}" required>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="alt_account" name="alt_account" {% if member.alt_account %}checked{% endif %}>
+                        <label for="alt_account" style="margin: 0;">Alt Account</label>
+                    </div>
+
+                    <div>
+                        <label>Troop Comp</label>
+                        <select name="troop_comp" required>
+                            <option value="Overweight" {% if (member.troop_comp or 'N/A') == 'Overweight' %}selected{% endif %}>Overweight</option>
+                            <option value="Pass" {% if (member.troop_comp or 'N/A') == 'Pass' %}selected{% endif %}>Pass</option>
+                            <option value="Low" {% if (member.troop_comp or 'N/A') == 'Low' %}selected{% endif %}>Low</option>
+                            <option value="N/A" {% if (member.troop_comp or 'N/A') == 'N/A' %}selected{% endif %}>N/A</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Communication</label>
+                        <select name="communication_method" required>
+                            <option value="WhatsApp" {% if (member.communication_method or 'N/A') == 'WhatsApp' %}selected{% endif %}>WhatsApp</option>
+                            <option value="Discord" {% if (member.communication_method or 'N/A') == 'Discord' %}selected{% endif %}>Discord</option>
+                            <option value="N/A" {% if (member.communication_method or 'N/A') == 'N/A' %}selected{% endif %}>N/A</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Communication Username</label>
+                        <input name="communication_username" value="{{ member.communication_username or '' }}">
                     </div>
 
                     <div class="full">

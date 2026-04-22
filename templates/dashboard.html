@@ -59,7 +59,7 @@
         .section h2 { margin: 0 0 16px; font-size: 22px; }
         .add-form {
             display: grid;
-            grid-template-columns: repeat(9, 1fr);
+            grid-template-columns: repeat(12, 1fr);
             gap: 12px;
             margin-bottom: 16px;
         }
@@ -70,6 +70,20 @@
             border: 1px solid #d1d5db;
             font-size: 14px;
             background: white;
+        }
+        .checkbox-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            background: white;
+            font-size: 14px;
+        }
+        .checkbox-box input {
+            width: auto;
+            margin: 0;
         }
         .toolbar {
             display: flex;
@@ -111,7 +125,7 @@
             font-size: 13px;
         }
         .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 950px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1050px; }
         th {
             background: #111827;
             color: white;
@@ -255,11 +269,11 @@
                     <input name="igg_id" placeholder="User ID" required>
 
                     <select name="rank" required>
-                        <option value="R1">R1</option>
-                        <option value="R2">R2</option>
-                        <option value="R3">R3</option>
-                        <option value="R4">R4</option>
-                        <option value="R5">R5</option>
+                        <option value="RANK1">RANK1</option>
+                        <option value="RANK2">RANK2</option>
+                        <option value="RANK3">RANK3</option>
+                        <option value="RANK4">RANK4</option>
+                        <option value="RANK5">RANK5</option>
                     </select>
 
                     <input name="might" placeholder="Might" type="number" required>
@@ -277,6 +291,26 @@
                     </select>
 
                     <input name="sigils" placeholder="Sigils" type="number" min="0" required>
+
+                    <label class="checkbox-box">
+                        <input type="checkbox" name="alt_account">
+                        Alt Account
+                    </label>
+
+                    <select name="troop_comp" required>
+                        <option value="Overweight">Overweight</option>
+                        <option value="Pass">Pass</option>
+                        <option value="Low">Low</option>
+                        <option value="N/A" selected>N/A</option>
+                    </select>
+
+                    <select name="communication_method" required>
+                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="Discord">Discord</option>
+                        <option value="N/A" selected>N/A</option>
+                    </select>
+
+                    <input name="communication_username" placeholder="Communication username">
                     <input name="comments" placeholder="Comments (optional)">
                 </div>
                 <button class="button" type="submit">Add Player</button>
@@ -344,7 +378,15 @@
                                 </a>
                             </th>
 
-                            <th>EDM</th>
+                            <th>
+                                <a class="sort-link" href="/?search={{ search }}&sort_by=edm&sort_dir={{ next_dir('edm') }}">
+                                    EDM
+                                    {% if sort_by == "edm" %}
+                                        <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                                    {% endif %}
+                                </a>
+                            </th>
+
                             <th>Name History</th>
 
                             {% if is_admin %}
@@ -361,7 +403,7 @@
                             <td>{{ m.igg_id }}</td>
                             {% endif %}
 
-                            <td><span class="pill">{{ m.rank or "R1" }}</span></td>
+                            <td><span class="pill">{{ m.rank or "RANK1" }}</span></td>
                             <td>{{ "{:,}".format(m.might or 0) }}</td>
                             <td>{{ "{:,}".format(m.kills or 0) }}</td>
                             <td>{{ "{:,}".format(m.edm or 0) }}</td>

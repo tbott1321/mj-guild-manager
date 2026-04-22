@@ -27,6 +27,13 @@ def get_conn():
     return conn
 
 
+def column_exists(conn, table_name, column_name):
+    c = conn.cursor()
+    c.execute(f"PRAGMA table_info({table_name})")
+    cols = [row[1] for row in c.fetchall()]
+    return column_name in cols
+
+
 def init_db():
     conn = get_conn()
     c = conn.cursor()
@@ -43,6 +50,10 @@ def init_db():
             mana INTEGER DEFAULT 0,
             sigils INTEGER DEFAULT 0,
             comments TEXT,
+            alt_account INTEGER DEFAULT 0,
+            troop_comp TEXT DEFAULT 'N/A',
+            communication_method TEXT DEFAULT 'N/A',
+            communication_username TEXT DEFAULT '',
             created_at TEXT,
             updated_at TEXT
         )
@@ -57,6 +68,52 @@ def init_db():
             changed_at TEXT
         )
     """)
+
+    if not column_exists(conn, "members", "mana"):
+        c.execute("ALTER TABLE members ADD COLUMN mana INTEGER DEFAULT 0")
+
+    if not column_exists(conn, "members", "sigils"):
+        c.execute("ALTER TABLE members ADD COLUMN sigils INTEGER DEFAULT 0")
+
+    if not column_exists(conn, "members", "comments"):
+        c.execute("ALTER TABLE members ADD COLUMN comments TEXT")
+
+    if not column_exists(conn, "members", "alt_account"):
+        c.execute("ALTER TABLE members ADD COLUMN alt_account INTEGER DEFAULT 0")
+
+    if not column_exists(conn, "members", "troop_comp"):
+        c.execute("ALTER TABLE members ADD COLUMN troop_comp TEXT DEFAULT 'N/A'")
+
+    if not column_exists(conn, "members", "communication_method"):
+        c.execute("ALTER TABLE members ADD COLUMN communication_method TEXT DEFAULT 'N/A'")
+
+    if not column_exists(conn, "members", "communication_username"):
+        c.execute("ALTER TABLE members ADD COLUMN communication_username TEXT DEFAULT ''")
+
+    if not column_exists(conn, "members", "created_at"):
+        c.execute("ALTER TABLE members ADD COLUMN created_at TEXT")
+
+    if not column_exists(conn, "members", "updated_at"):
+        c.execute("ALTER TABLE members ADD COLUMN updated_at TEXT")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("UPDATE members SET rank = 'RANK1' WHERE rank IS NULL OR TRIM(rank) = ''")
+    c.execute("UPDATE members SET rank = 'RANK1' WHERE rank = 'R1'")
+    c.execute("UPDATE members SET rank = 'RANK2' WHERE rank = 'R2'")
+    c.execute("UPDATE members SET rank = 'RANK3' WHERE rank = 'R3'")
+    c.execute("UPDATE members SET rank = 'RANK4' WHERE rank = 'R4'")
+    c.execute("UPDATE members SET rank = 'RANK5' WHERE rank = 'R5'")
+
+    c.execute("UPDATE members SET mana = COALESCE(mana, 0) WHERE mana IS NULL")
+    c.execute("UPDATE members SET sigils = COALESCE(sigils, 0) WHERE sigils IS NULL")
+    c.execute("UPDATE members SET comments = COALESCE(comments, '') WHERE comments IS NULL")
+    c.execute("UPDATE members SET alt_account = COALESCE(alt_account, 0) WHERE alt_account IS NULL")
+    c.execute("UPDATE members SET troop_comp = COALESCE(troop_comp, 'N/A') WHERE troop_comp IS NULL OR TRIM(troop_comp) = ''")
+    c.execute("UPDATE members SET communication_method = COALESCE(communication_method, 'N/A') WHERE communication_method IS NULL OR TRIM(communication_method) = ''")
+    c.execute("UPDATE members SET communication_username = COALESCE(communication_username, '') WHERE communication_username IS NULL")
+    c.execute("UPDATE members SET created_at = COALESCE(created_at, ?) WHERE created_at IS NULL OR TRIM(created_at) = ''", (now,))
+    c.execute("UPDATE members SET updated_at = COALESCE(updated_at, ?) WHERE updated_at IS NULL OR TRIM(updated_at) = ''", (now,))
 
     conn.commit()
     conn.close()
@@ -78,11 +135,23 @@ def is_admin(request: Request):
 
 
 def get_sort_sql(sort_by: str, sort_dir: str):
+    rank_sort = """
+        CASE UPPER(COALESCE(rank, 'RANK1'))
+            WHEN 'RANK1' THEN 1
+            WHEN 'RANK2' THEN 2
+            WHEN 'RANK3' THEN 3
+            WHEN 'RANK4' THEN 4
+            WHEN 'RANK5' THEN 5
+            ELSE 0
+        END
+    """
+
     sort_map = {
         "name": "LOWER(COALESCE(name, ''))",
         "might": "COALESCE(might, 0)",
         "kills": "COALESCE(kills, 0)",
-        "rank": "LOWER(COALESCE(rank, ''))"
+        "rank": rank_sort,
+        "edm": "COALESCE(edm, 0)"
     }
 
     sort_column = sort_map.get(sort_by, "COALESCE(might, 0)")
@@ -256,6 +325,10 @@ def edit_member(
     edm: int = Form(...),
     mana: int = Form(...),
     sigils: int = Form(...),
+    alt_account: str | None = Form(default=None),
+    troop_comp: str = Form("N/A"),
+    communication_method: str = Form("N/A"),
+    communication_username: str = Form(""),
     comments: str = Form("")
 ):
     if not is_admin(request):
@@ -263,6 +336,7 @@ def edit_member(
 
     mana = max(0, min(6, int(mana)))
     sigils = max(0, int(sigils))
+    alt_account_value = 1 if alt_account else 0
 
     conn = get_conn()
     c = conn.cursor()
@@ -278,11 +352,14 @@ def edit_member(
 
     c.execute("""
         UPDATE members
-        SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?, comments = ?, updated_at = ?
+        SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
+            alt_account = ?, troop_comp = ?, communication_method = ?, communication_username = ?,
+            comments = ?, updated_at = ?
         WHERE igg_id = ?
     """, (
-        name, rank, might, kills, edm, mana, sigils, comments,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
+        name, rank, might, kills, edm, mana, sigils,
+        alt_account_value, troop_comp, communication_method, communication_username,
+        comments, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
     ))
 
     conn.commit()
@@ -302,6 +379,10 @@ def add_member(
     edm: int = Form(...),
     mana: int = Form(0),
     sigils: int = Form(0),
+    alt_account: str | None = Form(default=None),
+    troop_comp: str = Form("N/A"),
+    communication_method: str = Form("N/A"),
+    communication_username: str = Form(""),
     comments: str = Form("")
 ):
     if not is_admin(request):
@@ -309,15 +390,18 @@ def add_member(
 
     mana = max(0, min(6, int(mana)))
     sigils = max(0, int(sigils))
+    alt_account_value = 1 if alt_account else 0
 
     conn = get_conn()
 
     conn.execute("""
         INSERT OR REPLACE INTO members
-        (igg_id, name, rank, might, kills, edm, mana, sigils, comments, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
+         communication_method, communication_username, comments, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        igg_id, name, rank, might, kills, edm, mana, sigils, comments,
+        igg_id, name, rank, might, kills, edm, mana, sigils, alt_account_value, troop_comp,
+        communication_method, communication_username, comments,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
@@ -406,6 +490,17 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
         kills = 0 if pd.isna(row["Kills"]) else int(float(row["Kills"]))
         edm = 0 if pd.isna(row["Enemies Destroyed Might"]) else int(float(row["Enemies Destroyed Might"]))
 
+        if rank == "R1":
+            rank = "RANK1"
+        elif rank == "R2":
+            rank = "RANK2"
+        elif rank == "R3":
+            rank = "RANK3"
+        elif rank == "R4":
+            rank = "RANK4"
+        elif rank == "R5":
+            rank = "RANK5"
+
         cur = conn.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
         existing = cur.fetchone()
 
@@ -415,26 +510,31 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
             existing_comments = existing["comments"] or ""
             existing_mana = 0 if existing["mana"] is None else int(existing["mana"])
             existing_sigils = 0 if existing["sigils"] is None else int(existing["sigils"])
+            existing_alt_account = 0 if existing["alt_account"] is None else int(existing["alt_account"])
+            existing_troop_comp = existing["troop_comp"] or "N/A"
+            existing_comm_method = existing["communication_method"] or "N/A"
+            existing_comm_username = existing["communication_username"] or ""
 
             conn.execute("""
                 UPDATE members
-                SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?, comments = ?, updated_at = ?
+                SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
+                    alt_account = ?, troop_comp = ?, communication_method = ?, communication_username = ?,
+                    comments = ?, updated_at = ?
                 WHERE igg_id = ?
             """, (
-                name, rank, might, kills, edm,
-                existing_mana, existing_sigils, existing_comments,
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                igg_id
+                name, rank, might, kills, edm, existing_mana, existing_sigils,
+                existing_alt_account, existing_troop_comp, existing_comm_method, existing_comm_username,
+                existing_comments, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
             ))
         else:
             conn.execute("""
                 INSERT INTO members
-                (igg_id, name, rank, might, kills, edm, mana, sigils, comments, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
+                 communication_method, communication_username, comments, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                igg_id, name, rank, might, kills, edm,
-                0, 0, "",
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                igg_id, name, rank, might, kills, edm, 0, 0, 0, "N/A",
+                "N/A", "", "", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
 

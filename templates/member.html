@@ -121,7 +121,7 @@
         <div class="card">
             <h2 style="margin-top: 0;">{{ member.name }}</h2>
             <div style="margin-bottom: 18px;">
-                <span class="pill">{{ member.rank or "R1" }}</span>
+                <span class="pill">{{ member.rank or "RANK1" }}</span>
             </div>
 
             <div class="grid">
@@ -151,6 +151,24 @@
                     <div class="label">Sigils</div>
                     <div class="value">{{ "{:,}".format(member.sigils or 0) }}</div>
                 </div>
+                <div class="item">
+                    <div class="label">Alt Account</div>
+                    <div class="value">{{ "Yes" if member.alt_account else "No" }}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Troop Comp</div>
+                    <div class="value">{{ member.troop_comp or "N/A" }}</div>
+                </div>
+                {% if is_admin %}
+                <div class="item">
+                    <div class="label">Communication</div>
+                    <div class="value">{{ member.communication_method or "N/A" }}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Communication Username</div>
+                    <div class="value">{{ member.communication_username or "N/A" }}</div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
