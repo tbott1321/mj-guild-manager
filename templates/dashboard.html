@@ -1,63 +1,360 @@
-<form method="GET" action="/" class="search-filter-form">
-    
-    <div class="search-row">
-        <input 
-            type="text"
-            name="search"
-            value="{{ search }}"
-            placeholder="Search by name, rank, might, kills, or EDM"
-            class="search-input"
-        >
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MJ Guild Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <button type="submit" class="search-btn">
-            Search
-        </button>
+    <style>
+        body {
+            font-family: Segoe UI, sans-serif;
+            background: #f5f7fb;
+            margin: 0;
+            padding: 0;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg, #1e293b, #312e81);
+            color: white;
+            padding: 20px;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .top-actions {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .btn {
+            background: white;
+            color: #312e81;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        .stats-box {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .stat-title {
+            color: gray;
+            font-size: 14px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .search-box {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
+        }
+
+        .search-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .search-row input,
+        .filter-row input,
+        .filter-row select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .search-row input {
+            flex: 1;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .search-btn {
+            background: #312e81;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .reset-btn {
+            background: #ddd;
+            color: black;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
+        }
+
+        th {
+            background: #1e293b;
+            color: white;
+            padding: 14px;
+            text-align: left;
+        }
+
+        th a {
+            color: white;
+            text-decoration: none;
+        }
+
+        td {
+            padding: 14px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr.clickable-row {
+            cursor: pointer;
+        }
+
+        tr.clickable-row:hover {
+            background: #f8fafc;
+        }
+
+        .rank1 { color: gold; font-weight: bold; }
+        .rank2 { color: red; font-weight: bold; }
+        .rank3 { color: blue; font-weight: bold; }
+        .rank4 { color: green; font-weight: bold; }
+        .rank5 { color: gray; font-weight: bold; }
+
+        .mobile-card {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            table {
+                display: none;
+            }
+
+            .mobile-card {
+                display: block;
+            }
+
+            .player-card {
+                background: white;
+                padding: 15px;
+                margin-bottom: 15px;
+                border-radius: 12px;
+                box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
+                cursor: pointer;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <h1>MJ Guild Manager</h1>
+
+    <div class="top-actions">
+        {% if is_admin %}
+            <a href="/import" class="btn">Import</a>
+            <a href="/export" class="btn">Export</a>
+            <a href="/admin/logout" class="btn">Logout</a>
+        {% else %}
+            <a href="/admin/login" class="btn">Admin Login</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="stats-box">
+        <div class="stat-card">
+            <div class="stat-title">Total Members</div>
+            <div class="stat-value">{{ members|length }}</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-title">Average Mana</div>
+            <div class="stat-value">
+                {% if members %}
+                    {{ ((members | sum(attribute='mana')) / members|length)|round(1) }}
+                {% else %}
+                    0
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-title">Average Sigils</div>
+            <div class="stat-value">
+                {% if members %}
+                    {{ ((members | sum(attribute='sigils')) / members|length)|round(1) }}
+                {% else %}
+                    0
+                {% endif %}
+            </div>
+        </div>
     </div>
 
-    <div class="filter-row">
-        <select name="rank_filter">
-            <option value="">All Ranks</option>
-            <option value="RANK1" {% if rank_filter == "RANK1" %}selected{% endif %}>RANK1</option>
-            <option value="RANK2" {% if rank_filter == "RANK2" %}selected{% endif %}>RANK2</option>
-            <option value="RANK3" {% if rank_filter == "RANK3" %}selected{% endif %}>RANK3</option>
-            <option value="RANK4" {% if rank_filter == "RANK4" %}selected{% endif %}>RANK4</option>
-            <option value="RANK5" {% if rank_filter == "RANK5" %}selected{% endif %}>RANK5</option>
-        </select>
+    <div class="search-box">
+        <form method="GET">
 
-        <select name="alt_filter">
-            <option value="">All Accounts</option>
-            <option value="yes" {% if alt_filter == "yes" %}selected{% endif %}>Alt Accounts</option>
-            <option value="no" {% if alt_filter == "no" %}selected{% endif %}>Main Accounts</option>
-        </select>
+            <div class="search-row">
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ search }}"
+                    placeholder="Search by name, rank, might, kills, or EDM"
+                >
 
-        <select name="troop_comp_filter">
-            <option value="">All Troop Comps</option>
-            <option value="Overweight" {% if troop_comp_filter == "Overweight" %}selected{% endif %}>Overweight</option>
-            <option value="Pass" {% if troop_comp_filter == "Pass" %}selected{% endif %}>Pass</option>
-            <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
-            <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
-        </select>
+                <button class="search-btn" type="submit">
+                    Search
+                </button>
+            </div>
 
-        <input 
-            type="number"
-            name="min_mana"
-            value="{{ min_mana }}"
-            placeholder="Min Mana"
-        >
+            <div class="filter-row">
+                <select name="rank_filter">
+                    <option value="">All Ranks</option>
+                    <option value="RANK1">RANK1</option>
+                    <option value="RANK2">RANK2</option>
+                    <option value="RANK3">RANK3</option>
+                    <option value="RANK4">RANK4</option>
+                    <option value="RANK5">RANK5</option>
+                </select>
 
-        <input 
-            type="number"
-            name="min_sigils"
-            value="{{ min_sigils }}"
-            placeholder="Min Sigils"
-        >
+                <select name="alt_filter">
+                    <option value="">All Accounts</option>
+                    <option value="yes">Alt Accounts</option>
+                    <option value="no">Main Accounts</option>
+                </select>
 
-        <button type="submit" class="search-btn">
-            Apply Filters
-        </button>
+                <select name="troop_comp_filter">
+                    <option value="">All Troop Comps</option>
+                    <option value="Overweight">Overweight</option>
+                    <option value="Pass">Pass</option>
+                    <option value="Low">Low</option>
+                    <option value="N/A">N/A</option>
+                </select>
 
-        <a href="/" class="reset-btn">
-            Reset
-        </a>
+                <input
+                    type="number"
+                    name="min_mana"
+                    value="{{ min_mana }}"
+                    placeholder="Min Mana"
+                >
+
+                <input
+                    type="number"
+                    name="min_sigils"
+                    value="{{ min_sigils }}"
+                    placeholder="Min Sigils"
+                >
+
+                <button class="search-btn" type="submit">
+                    Apply Filters
+                </button>
+
+                <a href="/" class="reset-btn">
+                    Reset
+                </a>
+            </div>
+        </form>
     </div>
-</form>
+
+    <!-- Desktop Table -->
+    <table>
+        <thead>
+            <tr>
+                <th><a href="/?sort_by=name">Name</a></th>
+                <th><a href="/?sort_by=rank">Rank</a></th>
+                <th><a href="/?sort_by=might">Might</a></th>
+                <th><a href="/?sort_by=kills">Kills</a></th>
+                <th><a href="/?sort_by=edm">EDM</a></th>
+                <th>Mana</th>
+                <th>Sigils</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for member in members %}
+            <tr class="clickable-row"
+                onclick="window.location='/member/{{ member.igg_id }}'">
+
+                <td>{{ member.name }}</td>
+
+                <td class="
+                    {% if member.rank == 'RANK1' %}rank1{% endif %}
+                    {% if member.rank == 'RANK2' %}rank2{% endif %}
+                    {% if member.rank == 'RANK3' %}rank3{% endif %}
+                    {% if member.rank == 'RANK4' %}rank4{% endif %}
+                    {% if member.rank == 'RANK5' %}rank5{% endif %}
+                ">
+                    {{ member.rank }}
+                </td>
+
+                <td>{{ "{:,}".format(member.might or 0) }}</td>
+                <td>{{ "{:,}".format(member.kills or 0) }}</td>
+                <td>{{ "{:,}".format(member.edm or 0) }}</td>
+                <td>{{ member.mana }}</td>
+                <td>{{ member.sigils }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Mobile Cards -->
+    <div class="mobile-card">
+        {% for member in members %}
+        <div class="player-card"
+             onclick="window.location='/member/{{ member.igg_id }}'">
+
+            <h3>{{ member.name }}</h3>
+            <p><strong>{{ member.rank }}</strong></p>
+            <p>Might: {{ "{:,}".format(member.might or 0) }}</p>
+            <p>Kills: {{ "{:,}".format(member.kills or 0) }}</p>
+            <p>EDM: {{ "{:,}".format(member.edm or 0) }}</p>
+            <p>Mana: {{ member.mana }}</p>
+            <p>Sigils: {{ member.sigils }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+</body>
+</html>
