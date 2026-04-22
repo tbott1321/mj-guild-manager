@@ -1,530 +1,63 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ Guild Manager - Dashboard</title>
-    <style>
-        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
-        body { margin: 0; background: #f3f4f6; color: #111827; }
-        .topbar {
-            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
-            color: white;
-            padding: 18px 28px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        .topbar-inner {
-            max-width: 1350px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            align-items: center;
-        }
-        .title-wrap { display: flex; align-items: center; min-height: 44px; }
-        .title { font-size: 28px; font-weight: 700; line-height: 1.1; margin: 0; }
-        .top-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-        .top-btn {
-            text-decoration: none;
-            color: white;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.15);
-            padding: 10px 16px;
-            border-radius: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-        .container { max-width: 1350px; margin: 24px auto; padding: 0 20px 24px; }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 18px;
-            margin-bottom: 24px;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-        }
-        .stat-label { color: #6b7280; font-size: 14px; margin-bottom: 8px; }
-        .stat-value { font-size: 26px; font-weight: 700; }
-        .section {
-            background: white;
-            border-radius: 20px;
-            padding: 22px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-            margin-bottom: 24px;
-        }
-        .section h2 { margin: 0 0 16px; font-size: 22px; }
-        .add-form {
-            display: grid;
-            grid-template-columns: repeat(12, 1fr);
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .add-form input, .add-form select {
-            width: 100%;
-            padding: 12px;
-            border-radius: 12px;
-            border: 1px solid #d1d5db;
-            font-size: 14px;
-            background: white;
-        }
-        .checkbox-box {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px;
-            border-radius: 12px;
-            border: 1px solid #d1d5db;
-            background: white;
-            font-size: 14px;
-        }
-        .checkbox-box input {
-            width: auto;
-            margin: 0;
-        }
-        .toolbar {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            align-items: end;
-            margin-bottom: 18px;
-        }
-        .toolbar .full {
-            grid-column: 1 / -1;
-        }
-        .toolbar input,
-        .toolbar select {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: 1px solid #d1d5db;
-            font-size: 14px;
-            background: white;
-        }
-        .toolbar-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            grid-column: 1 / -1;
-        }
-        .button, .link-button, .small-link, .sort-link {
-            display: inline-block;
-            text-decoration: none;
-            border: none;
-            border-radius: 12px;
-            padding: 12px 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .button {
-            background: linear-gradient(135deg, #6366f1, #7c3aed);
-            color: white;
-        }
-        .link-button {
-            background: #eef2ff;
-            color: #4338ca;
-        }
-        .small-link {
-            background: #eef2ff;
-            color: #4338ca;
-            padding: 8px 12px;
-            font-size: 13px;
-        }
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 1050px; }
-        th {
-            background: #111827;
-            color: white;
-            text-align: left;
-            padding: 14px;
-            font-size: 14px;
-            white-space: nowrap;
-        }
-        td {
-            padding: 14px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 14px;
-            vertical-align: middle;
-        }
-        tr.data-row { cursor: pointer; transition: background 0.15s ease; }
-        tr.data-row:hover td { background: #f9fafb; }
+<form method="GET" action="/" class="search-filter-form">
+    
+    <div class="search-row">
+        <input 
+            type="text"
+            name="search"
+            value="{{ search }}"
+            placeholder="Search by name, rank, might, kills, or EDM"
+            class="search-input"
+        >
 
-        .pill {
-            display: inline-block;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 700;
-        }
-        .rank-1 { background: #e5e7eb; color: #111827; }
-        .rank-2 { background: #dbeafe; color: #1e3a8a; }
-        .rank-3 { background: #dcfce7; color: #166534; }
-        .rank-4 { background: #ede9fe; color: #6b21a8; }
-        .rank-5 { background: #fef3c7; color: #92400e; }
-
-        .danger { color: #dc2626; text-decoration: none; font-weight: 600; }
-        .empty {
-            padding: 18px;
-            background: #f9fafb;
-            border-radius: 14px;
-            color: #6b7280;
-        }
-        .hint { font-size: 12px; color: #6b7280; }
-        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-        .click-note { color: #6b7280; font-size: 13px; margin-bottom: 12px; }
-        .sort-link {
-            padding: 0;
-            background: transparent;
-            color: white;
-            font-size: 14px;
-            border-radius: 0;
-        }
-        .sort-link:hover { text-decoration: underline; }
-        .sort-indicator { margin-left: 6px; font-size: 12px; opacity: 0.9; }
-
-        .comm-whatsapp,
-        .comm-discord {
-            display: none;
-        }
-
-        @media (max-width: 1250px) {
-            .stats { grid-template-columns: repeat(3, 1fr); }
-            .add-form { grid-template-columns: 1fr 1fr; }
-            .toolbar { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 900px) {
-            .stats { grid-template-columns: repeat(2, 1fr); }
-            .topbar-inner { flex-direction: column; align-items: flex-start; }
-            .title-wrap { min-height: auto; }
-            .toolbar { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 700px) {
-            .stats { grid-template-columns: 1fr; }
-            .add-form { grid-template-columns: 1fr; }
-            .toolbar-actions { flex-direction: column; align-items: stretch; }
-            .toolbar-actions a,
-            .toolbar-actions button { width: 100%; text-align: center; }
-        }
-    </style>
-    <script>
-        function updateAddCommFields() {
-            const method = document.getElementById("add_communication_method");
-            const wa = document.getElementById("add_whatsapp_wrap");
-            const dc = document.getElementById("add_discord_wrap");
-            if (!method || !wa || !dc) return;
-
-            wa.style.display = "none";
-            dc.style.display = "none";
-
-            if (method.value === "WhatsApp") {
-                wa.style.display = "block";
-            } else if (method.value === "Discord") {
-                dc.style.display = "block";
-            } else if (method.value === "Both") {
-                wa.style.display = "block";
-                dc.style.display = "block";
-            }
-        }
-
-        document.addEventListener("DOMContentLoaded", updateAddCommFields);
-    </script>
-</head>
-<body>
-    <div class="topbar">
-        <div class="topbar-inner">
-            <div class="title-wrap">
-                <div class="title">MJ Guild Manager</div>
-            </div>
-            <div class="top-actions">
-                {% if is_admin %}
-                    <a class="top-btn" href="/admin/logout">Admin Logout</a>
-                {% else %}
-                    <a class="top-btn" href="/admin/login">Admin Login</a>
-                {% endif %}
-            </div>
-        </div>
+        <button type="submit" class="search-btn">
+            Search
+        </button>
     </div>
 
-    <div class="container">
-        {% set total_might = namespace(value=0) %}
-        {% set total_kills = namespace(value=0) %}
-        {% set total_edm = namespace(value=0) %}
-        {% set total_mana = namespace(value=0) %}
-        {% set total_sigils = namespace(value=0) %}
-        {% set member_count = members|length %}
-        {% for m in members %}
-            {% set total_might.value = total_might.value + (m.might or 0) %}
-            {% set total_kills.value = total_kills.value + (m.kills or 0) %}
-            {% set total_edm.value = total_edm.value + (m.edm or 0) %}
-            {% set total_mana.value = total_mana.value + (m.mana or 0) %}
-            {% set total_sigils.value = total_sigils.value + (m.sigils or 0) %}
-        {% endfor %}
+    <div class="filter-row">
+        <select name="rank_filter">
+            <option value="">All Ranks</option>
+            <option value="RANK1" {% if rank_filter == "RANK1" %}selected{% endif %}>RANK1</option>
+            <option value="RANK2" {% if rank_filter == "RANK2" %}selected{% endif %}>RANK2</option>
+            <option value="RANK3" {% if rank_filter == "RANK3" %}selected{% endif %}>RANK3</option>
+            <option value="RANK4" {% if rank_filter == "RANK4" %}selected{% endif %}>RANK4</option>
+            <option value="RANK5" {% if rank_filter == "RANK5" %}selected{% endif %}>RANK5</option>
+        </select>
 
-        {% if member_count > 0 %}
-            {% set avg_mana = (total_mana.value / member_count) %}
-            {% set avg_sigils = (total_sigils.value / member_count) %}
-        {% else %}
-            {% set avg_mana = 0 %}
-            {% set avg_sigils = 0 %}
-        {% endif %}
+        <select name="alt_filter">
+            <option value="">All Accounts</option>
+            <option value="yes" {% if alt_filter == "yes" %}selected{% endif %}>Alt Accounts</option>
+            <option value="no" {% if alt_filter == "no" %}selected{% endif %}>Main Accounts</option>
+        </select>
 
-        {% macro next_dir(column) -%}
-            {%- if sort_by == column and sort_dir == "asc" -%}
-                desc
-            {%- else -%}
-                asc
-            {%- endif -%}
-        {%- endmacro %}
+        <select name="troop_comp_filter">
+            <option value="">All Troop Comps</option>
+            <option value="Overweight" {% if troop_comp_filter == "Overweight" %}selected{% endif %}>Overweight</option>
+            <option value="Pass" {% if troop_comp_filter == "Pass" %}selected{% endif %}>Pass</option>
+            <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
+            <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
+        </select>
 
-        {% macro rank_class(rank_value) -%}
-            {%- if rank_value == "RANK1" -%}rank-1
-            {%- elif rank_value == "RANK2" -%}rank-2
-            {%- elif rank_value == "RANK3" -%}rank-3
-            {%- elif rank_value == "RANK4" -%}rank-4
-            {%- elif rank_value == "RANK5" -%}rank-5
-            {%- else -%}rank-1
-            {%- endif -%}
-        {%- endmacro %}
+        <input 
+            type="number"
+            name="min_mana"
+            value="{{ min_mana }}"
+            placeholder="Min Mana"
+        >
 
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-label">Total Members</div>
-                <div class="stat-value">{{ member_count }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total Might</div>
-                <div class="stat-value">{{ "{:,}".format(total_might.value) }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total Kills</div>
-                <div class="stat-value">{{ "{:,}".format(total_kills.value) }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Total EDM</div>
-                <div class="stat-value">{{ "{:,}".format(total_edm.value) }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Average Mana</div>
-                <div class="stat-value">{{ "{:.2f}".format(avg_mana) }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Average Sigils</div>
-                <div class="stat-value">{{ "{:.2f}".format(avg_sigils) }}</div>
-            </div>
-        </div>
+        <input 
+            type="number"
+            name="min_sigils"
+            value="{{ min_sigils }}"
+            placeholder="Min Sigils"
+        >
 
-        {% if is_admin %}
-        <div class="section">
-            <h2>Add New Player</h2>
-            <form action="/add" method="post">
-                <div class="add-form">
-                    <input name="name" placeholder="Player name" required>
-                    <input name="igg_id" placeholder="User ID" required>
+        <button type="submit" class="search-btn">
+            Apply Filters
+        </button>
 
-                    <select name="rank" required>
-                        <option value="RANK1">RANK1</option>
-                        <option value="RANK2">RANK2</option>
-                        <option value="RANK3">RANK3</option>
-                        <option value="RANK4">RANK4</option>
-                        <option value="RANK5">RANK5</option>
-                    </select>
-
-                    <input name="might" placeholder="Might" type="number" required>
-                    <input name="kills" placeholder="Kills" type="number" required>
-                    <input name="edm" placeholder="Enemy Destroyed Might" type="number" required>
-
-                    <select name="mana" required>
-                        <option value="0">Mana 0</option>
-                        <option value="1">Mana 1</option>
-                        <option value="2">Mana 2</option>
-                        <option value="3">Mana 3</option>
-                        <option value="4">Mana 4</option>
-                        <option value="5">Mana 5</option>
-                        <option value="6">Mana 6</option>
-                    </select>
-
-                    <input name="sigils" placeholder="Sigils" type="number" min="0" required>
-
-                    <label class="checkbox-box">
-                        <input type="checkbox" name="alt_account">
-                        Alt Account
-                    </label>
-
-                    <select name="troop_comp" required>
-                        <option value="Overweight">Overweight</option>
-                        <option value="Pass">Pass</option>
-                        <option value="Low">Low</option>
-                        <option value="N/A" selected>N/A</option>
-                    </select>
-
-                    <select id="add_communication_method" name="communication_method" onchange="updateAddCommFields()" required>
-                        <option value="WhatsApp">WhatsApp</option>
-                        <option value="Discord">Discord</option>
-                        <option value="Both">Both</option>
-                        <option value="N/A" selected>N/A</option>
-                    </select>
-
-                    <input id="add_whatsapp_wrap" name="whatsapp_number" placeholder="WhatsApp number">
-                    <input id="add_discord_wrap" name="discord_username" placeholder="Discord username">
-
-                    <input name="comments" placeholder="Comments (optional)">
-                </div>
-                <button class="button" type="submit">Add Player</button>
-                <a class="link-button" href="/import">Weekly Import</a>
-            </form>
-        </div>
-        {% endif %}
-
-        <div class="section">
-            <h2>Guild Roster</h2>
-            <div class="click-note">Click anywhere on a player row to open their profile.</div>
-
-            <form class="toolbar" method="get" action="/">
-                <div class="full">
-                    <input type="text" name="search" value="{{ search or '' }}" placeholder="Search by name, rank, stats, comments, troop comp, WhatsApp, Discord">
-                </div>
-
-                <select name="rank_filter">
-                    <option value="">All Ranks</option>
-                    <option value="RANK1" {% if rank_filter == "RANK1" %}selected{% endif %}>RANK1</option>
-                    <option value="RANK2" {% if rank_filter == "RANK2" %}selected{% endif %}>RANK2</option>
-                    <option value="RANK3" {% if rank_filter == "RANK3" %}selected{% endif %}>RANK3</option>
-                    <option value="RANK4" {% if rank_filter == "RANK4" %}selected{% endif %}>RANK4</option>
-                    <option value="RANK5" {% if rank_filter == "RANK5" %}selected{% endif %}>RANK5</option>
-                </select>
-
-                <select name="alt_filter">
-                    <option value="">All Accounts</option>
-                    <option value="yes" {% if alt_filter == "yes" %}selected{% endif %}>Alt Accounts Only</option>
-                    <option value="no" {% if alt_filter == "no" %}selected{% endif %}>Main Accounts Only</option>
-                </select>
-
-                <select name="troop_comp_filter">
-                    <option value="">All Troop Comp</option>
-                    <option value="Overweight" {% if troop_comp_filter == "Overweight" %}selected{% endif %}>Overweight</option>
-                    <option value="Pass" {% if troop_comp_filter == "Pass" %}selected{% endif %}>Pass</option>
-                    <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
-                    <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
-                </select>
-
-                <input type="number" min="0" max="6" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
-                <input type="number" min="0" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
-
-                <input type="hidden" name="sort_by" value="{{ sort_by }}">
-                <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
-
-                <div class="toolbar-actions">
-                    <button class="button" type="submit">Apply Filters</button>
-                    <a class="link-button" href="/">Clear</a>
-                    {% if is_admin %}
-                    <a class="link-button" href="/export?search={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}">Export to Excel</a>
-                    {% endif %}
-                </div>
-            </form>
-
-            {% if members|length == 0 %}
-                <div class="empty">No players found.</div>
-            {% else %}
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=name&sort_dir={{ next_dir('name') }}">
-                                    Player
-                                    {% if sort_by == "name" %}
-                                        <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                                    {% endif %}
-                                </a>
-                            </th>
-
-                            {% if is_admin %}
-                            <th>User ID</th>
-                            {% endif %}
-
-                            <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=rank&sort_dir={{ next_dir('rank') }}">
-                                    Rank
-                                    {% if sort_by == "rank" %}
-                                        <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                                    {% endif %}
-                                </a>
-                            </th>
-
-                            <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=might&sort_dir={{ next_dir('might') }}">
-                                    Might
-                                    {% if sort_by == "might" %}
-                                        <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                                    {% endif %}
-                                </a>
-                            </th>
-
-                            <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=kills&sort_dir={{ next_dir('kills') }}">
-                                    Kills
-                                    {% if sort_by == "kills" %}
-                                        <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                                    {% endif %}
-                                </a>
-                            </th>
-
-                            <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=edm&sort_dir={{ next_dir('edm') }}">
-                                    EDM
-                                    {% if sort_by == "edm" %}
-                                        <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                                    {% endif %}
-                                </a>
-                            </th>
-
-                            <th>Name History</th>
-
-                            {% if is_admin %}
-                            <th>Action</th>
-                            {% endif %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for m in members %}
-                        <tr class="data-row" onclick="window.location='/member/{{ m.igg_id }}'">
-                            <td><strong>{{ m.name }}</strong></td>
-
-                            {% if is_admin %}
-                            <td>{{ m.igg_id }}</td>
-                            {% endif %}
-
-                            <td><span class="pill {{ rank_class(m.rank or 'RANK1') }}">{{ m.rank or "RANK1" }}</span></td>
-                            <td>{{ "{:,}".format(m.might or 0) }}</td>
-                            <td>{{ "{:,}".format(m.kills or 0) }}</td>
-                            <td>{{ "{:,}".format(m.edm or 0) }}</td>
-                            <td>
-                                {% if m.last_name_change %}
-                                <div class="hint">Last change: {{ m.last_name_change }}</div>
-                                {% else %}
-                                <div class="hint">No name changes logged</div>
-                                {% endif %}
-                            </td>
-
-                            {% if is_admin %}
-                            <td onclick="event.stopPropagation();">
-                                <div class="actions">
-                                    <a class="small-link" href="/member/{{ m.igg_id }}">View</a>
-                                    <a class="small-link" href="/member/{{ m.igg_id }}/edit">Edit</a>
-                                    <a class="danger" href="/delete/{{ m.igg_id }}">Delete</a>
-                                </div>
-                            </td>
-                            {% endif %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% endif %}
-        </div>
+        <a href="/" class="reset-btn">
+            Reset
+        </a>
     </div>
-</body>
-</html>
+</form>
