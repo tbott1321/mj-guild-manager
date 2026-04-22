@@ -164,10 +164,18 @@
                     <div class="label">Communication</div>
                     <div class="value">{{ member.communication_method or "N/A" }}</div>
                 </div>
+                {% if member.communication_method in ["WhatsApp", "Both"] %}
                 <div class="item">
-                    <div class="label">Communication Username</div>
-                    <div class="value">{{ member.communication_username or "N/A" }}</div>
+                    <div class="label">WhatsApp Number</div>
+                    <div class="value">{{ member.whatsapp_number or "N/A" }}</div>
                 </div>
+                {% endif %}
+                {% if member.communication_method in ["Discord", "Both"] %}
+                <div class="item">
+                    <div class="label">Discord Username</div>
+                    <div class="value">{{ member.discord_username or "N/A" }}</div>
+                </div>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

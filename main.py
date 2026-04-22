@@ -54,7 +54,8 @@ def init_db():
             alt_account INTEGER DEFAULT 0,
             troop_comp TEXT DEFAULT 'N/A',
             communication_method TEXT DEFAULT 'N/A',
-            communication_username TEXT DEFAULT '',
+            whatsapp_number TEXT DEFAULT '',
+            discord_username TEXT DEFAULT '',
             created_at TEXT,
             updated_at TEXT
         )
@@ -88,8 +89,22 @@ def init_db():
     if not column_exists(conn, "members", "communication_method"):
         c.execute("ALTER TABLE members ADD COLUMN communication_method TEXT DEFAULT 'N/A'")
 
-    if not column_exists(conn, "members", "communication_username"):
-        c.execute("ALTER TABLE members ADD COLUMN communication_username TEXT DEFAULT ''")
+    if not column_exists(conn, "members", "whatsapp_number"):
+        c.execute("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''")
+
+    if not column_exists(conn, "members", "discord_username"):
+        c.execute("ALTER TABLE members ADD COLUMN discord_username TEXT DEFAULT ''")
+
+    if column_exists(conn, "members", "communication_username") and not column_exists(conn, "members", "discord_username_old_migrated_flag_dummy"):
+        # Best-effort migration from old single username field
+        c.execute("""
+            UPDATE members
+            SET discord_username = COALESCE(discord_username, communication_username)
+            WHERE (discord_username IS NULL OR TRIM(discord_username) = '')
+              AND communication_method IN ('Discord', 'Both')
+              AND communication_username IS NOT NULL
+              AND TRIM(communication_username) != ''
+        """)
 
     if not column_exists(conn, "members", "created_at"):
         c.execute("ALTER TABLE members ADD COLUMN created_at TEXT")
@@ -112,7 +127,8 @@ def init_db():
     c.execute("UPDATE members SET alt_account = COALESCE(alt_account, 0) WHERE alt_account IS NULL")
     c.execute("UPDATE members SET troop_comp = COALESCE(troop_comp, 'N/A') WHERE troop_comp IS NULL OR TRIM(troop_comp) = ''")
     c.execute("UPDATE members SET communication_method = COALESCE(communication_method, 'N/A') WHERE communication_method IS NULL OR TRIM(communication_method) = ''")
-    c.execute("UPDATE members SET communication_username = COALESCE(communication_username, '') WHERE communication_username IS NULL")
+    c.execute("UPDATE members SET whatsapp_number = COALESCE(whatsapp_number, '') WHERE whatsapp_number IS NULL")
+    c.execute("UPDATE members SET discord_username = COALESCE(discord_username, '') WHERE discord_username IS NULL")
     c.execute("UPDATE members SET created_at = COALESCE(created_at, ?) WHERE created_at IS NULL OR TRIM(created_at) = ''", (now,))
     c.execute("UPDATE members SET updated_at = COALESCE(updated_at, ?) WHERE updated_at IS NULL OR TRIM(updated_at) = ''", (now,))
 
@@ -171,7 +187,6 @@ def build_members_query(
     rank_filter: str = "",
     alt_filter: str = "",
     troop_comp_filter: str = "",
-    communication_filter: str = "",
     min_mana: str = "",
     min_sigils: str = "",
     sort_by: str = "might",
@@ -200,16 +215,14 @@ def build_members_query(
                 OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
                 OR LOWER(COALESCE(m.comments, '')) LIKE ?
-                OR LOWER(COALESCE(m.communication_username, '')) LIKE ?
+                OR LOWER(COALESCE(m.whatsapp_number, '')) LIKE ?
+                OR LOWER(COALESCE(m.discord_username, '')) LIKE ?
                 OR LOWER(COALESCE(m.troop_comp, '')) LIKE ?
                 OR LOWER(COALESCE(m.communication_method, '')) LIKE ?
             )
         """
         like_value = f"%{search.lower()}%"
-        params.extend([
-            like_value, like_value, like_value, like_value, like_value,
-            like_value, like_value, like_value, like_value
-        ])
+        params.extend([like_value] * 10)
 
     if rank_filter:
         sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
@@ -223,10 +236,6 @@ def build_members_query(
     if troop_comp_filter:
         sql += " AND COALESCE(m.troop_comp, 'N/A') = ?"
         params.append(troop_comp_filter)
-
-    if communication_filter:
-        sql += " AND COALESCE(m.communication_method, 'N/A') = ?"
-        params.append(communication_filter)
 
     if min_mana != "":
         try:
@@ -246,6 +255,25 @@ def build_members_query(
     return sql, params
 
 
+def normalise_comm_fields(method: str, whatsapp_number: str, discord_username: str):
+    method = (method or "N/A").strip()
+    whatsapp_number = (whatsapp_number or "").strip()
+    discord_username = (discord_username or "").strip()
+
+    if method == "WhatsApp":
+        discord_username = ""
+    elif method == "Discord":
+        whatsapp_number = ""
+    elif method == "Both":
+        pass
+    else:
+        method = "N/A"
+        whatsapp_number = ""
+        discord_username = ""
+
+    return method, whatsapp_number, discord_username
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(
     request: Request,
@@ -255,7 +283,6 @@ def dashboard(
     rank_filter: str = Query(default=""),
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
-    communication_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
     min_sigils: str = Query(default="")
 ):
@@ -267,7 +294,6 @@ def dashboard(
         rank_filter=rank_filter,
         alt_filter=alt_filter,
         troop_comp_filter=troop_comp_filter,
-        communication_filter=communication_filter,
         min_mana=min_mana,
         min_sigils=min_sigils,
         sort_by=sort_by,
@@ -289,7 +315,6 @@ def dashboard(
             "rank_filter": rank_filter,
             "alt_filter": alt_filter,
             "troop_comp_filter": troop_comp_filter,
-            "communication_filter": communication_filter,
             "min_mana": min_mana,
             "min_sigils": min_sigils,
             "is_admin": is_admin(request)
@@ -306,7 +331,6 @@ def export_members(
     rank_filter: str = Query(default=""),
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
-    communication_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
     min_sigils: str = Query(default="")
 ):
@@ -319,7 +343,6 @@ def export_members(
         rank_filter=rank_filter,
         alt_filter=alt_filter,
         troop_comp_filter=troop_comp_filter,
-        communication_filter=communication_filter,
         min_mana=min_mana,
         min_sigils=min_sigils,
         sort_by=sort_by,
@@ -331,7 +354,7 @@ def export_members(
     export_cols = [
         "name", "igg_id", "rank", "might", "kills", "edm",
         "mana", "sigils", "alt_account", "troop_comp",
-        "communication_method", "communication_username",
+        "communication_method", "whatsapp_number", "discord_username",
         "comments", "created_at", "updated_at", "last_name_change"
     ]
     df = df[[col for col in export_cols if col in df.columns]]
@@ -460,7 +483,8 @@ def edit_member(
     alt_account: str | None = Form(default=None),
     troop_comp: str = Form("N/A"),
     communication_method: str = Form("N/A"),
-    communication_username: str = Form(""),
+    whatsapp_number: str = Form(""),
+    discord_username: str = Form(""),
     comments: str = Form("")
 ):
     if not is_admin(request):
@@ -469,6 +493,9 @@ def edit_member(
     mana = max(0, min(6, int(mana)))
     sigils = max(0, int(sigils))
     alt_account_value = 1 if alt_account else 0
+    communication_method, whatsapp_number, discord_username = normalise_comm_fields(
+        communication_method, whatsapp_number, discord_username
+    )
 
     conn = get_conn()
     c = conn.cursor()
@@ -485,12 +512,12 @@ def edit_member(
     c.execute("""
         UPDATE members
         SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
-            alt_account = ?, troop_comp = ?, communication_method = ?, communication_username = ?,
+            alt_account = ?, troop_comp = ?, communication_method = ?, whatsapp_number = ?, discord_username = ?,
             comments = ?, updated_at = ?
         WHERE igg_id = ?
     """, (
         name, rank, might, kills, edm, mana, sigils,
-        alt_account_value, troop_comp, communication_method, communication_username,
+        alt_account_value, troop_comp, communication_method, whatsapp_number, discord_username,
         comments, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
     ))
 
@@ -514,7 +541,8 @@ def add_member(
     alt_account: str | None = Form(default=None),
     troop_comp: str = Form("N/A"),
     communication_method: str = Form("N/A"),
-    communication_username: str = Form(""),
+    whatsapp_number: str = Form(""),
+    discord_username: str = Form(""),
     comments: str = Form("")
 ):
     if not is_admin(request):
@@ -523,17 +551,20 @@ def add_member(
     mana = max(0, min(6, int(mana)))
     sigils = max(0, int(sigils))
     alt_account_value = 1 if alt_account else 0
+    communication_method, whatsapp_number, discord_username = normalise_comm_fields(
+        communication_method, whatsapp_number, discord_username
+    )
 
     conn = get_conn()
 
     conn.execute("""
         INSERT OR REPLACE INTO members
         (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
-         communication_method, communication_username, comments, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         communication_method, whatsapp_number, discord_username, comments, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         igg_id, name, rank, might, kills, edm, mana, sigils, alt_account_value, troop_comp,
-        communication_method, communication_username, comments,
+        communication_method, whatsapp_number, discord_username, comments,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
@@ -645,28 +676,29 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
             existing_alt_account = 0 if existing["alt_account"] is None else int(existing["alt_account"])
             existing_troop_comp = existing["troop_comp"] or "N/A"
             existing_comm_method = existing["communication_method"] or "N/A"
-            existing_comm_username = existing["communication_username"] or ""
+            existing_whatsapp = existing["whatsapp_number"] or ""
+            existing_discord = existing["discord_username"] or ""
 
             conn.execute("""
                 UPDATE members
                 SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
-                    alt_account = ?, troop_comp = ?, communication_method = ?, communication_username = ?,
+                    alt_account = ?, troop_comp = ?, communication_method = ?, whatsapp_number = ?, discord_username = ?,
                     comments = ?, updated_at = ?
                 WHERE igg_id = ?
             """, (
                 name, rank, might, kills, edm, existing_mana, existing_sigils,
-                existing_alt_account, existing_troop_comp, existing_comm_method, existing_comm_username,
+                existing_alt_account, existing_troop_comp, existing_comm_method, existing_whatsapp, existing_discord,
                 existing_comments, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
             ))
         else:
             conn.execute("""
                 INSERT INTO members
                 (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
-                 communication_method, communication_username, comments, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 communication_method, whatsapp_number, discord_username, comments, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 igg_id, name, rank, might, kills, edm, 0, 0, 0, "N/A",
-                "N/A", "", "", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "N/A", "", "", "", datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
 

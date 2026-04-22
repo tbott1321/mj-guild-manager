@@ -185,6 +185,11 @@
         .sort-link:hover { text-decoration: underline; }
         .sort-indicator { margin-left: 6px; font-size: 12px; opacity: 0.9; }
 
+        .comm-whatsapp,
+        .comm-discord {
+            display: none;
+        }
+
         @media (max-width: 1250px) {
             .stats { grid-template-columns: repeat(3, 1fr); }
             .add-form { grid-template-columns: 1fr 1fr; }
@@ -204,6 +209,28 @@
             .toolbar-actions button { width: 100%; text-align: center; }
         }
     </style>
+    <script>
+        function updateAddCommFields() {
+            const method = document.getElementById("add_communication_method");
+            const wa = document.getElementById("add_whatsapp_wrap");
+            const dc = document.getElementById("add_discord_wrap");
+            if (!method || !wa || !dc) return;
+
+            wa.style.display = "none";
+            dc.style.display = "none";
+
+            if (method.value === "WhatsApp") {
+                wa.style.display = "block";
+            } else if (method.value === "Discord") {
+                dc.style.display = "block";
+            } else if (method.value === "Both") {
+                wa.style.display = "block";
+                dc.style.display = "block";
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", updateAddCommFields);
+    </script>
 </head>
 <body>
     <div class="topbar">
@@ -333,13 +360,16 @@
                         <option value="N/A" selected>N/A</option>
                     </select>
 
-                    <select name="communication_method" required>
+                    <select id="add_communication_method" name="communication_method" onchange="updateAddCommFields()" required>
                         <option value="WhatsApp">WhatsApp</option>
                         <option value="Discord">Discord</option>
+                        <option value="Both">Both</option>
                         <option value="N/A" selected>N/A</option>
                     </select>
 
-                    <input name="communication_username" placeholder="Communication username">
+                    <input id="add_whatsapp_wrap" name="whatsapp_number" placeholder="WhatsApp number">
+                    <input id="add_discord_wrap" name="discord_username" placeholder="Discord username">
+
                     <input name="comments" placeholder="Comments (optional)">
                 </div>
                 <button class="button" type="submit">Add Player</button>
@@ -354,7 +384,7 @@
 
             <form class="toolbar" method="get" action="/">
                 <div class="full">
-                    <input type="text" name="search" value="{{ search or '' }}" placeholder="Search by name, rank, stats, comments, troop comp, communication username">
+                    <input type="text" name="search" value="{{ search or '' }}" placeholder="Search by name, rank, stats, comments, troop comp, WhatsApp, Discord">
                 </div>
 
                 <select name="rank_filter">
@@ -380,13 +410,6 @@
                     <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
                 </select>
 
-                <select name="communication_filter">
-                    <option value="">All Communication</option>
-                    <option value="WhatsApp" {% if communication_filter == "WhatsApp" %}selected{% endif %}>WhatsApp</option>
-                    <option value="Discord" {% if communication_filter == "Discord" %}selected{% endif %}>Discord</option>
-                    <option value="N/A" {% if communication_filter == "N/A" %}selected{% endif %}>N/A</option>
-                </select>
-
                 <input type="number" min="0" max="6" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
                 <input type="number" min="0" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
 
@@ -397,7 +420,7 @@
                     <button class="button" type="submit">Apply Filters</button>
                     <a class="link-button" href="/">Clear</a>
                     {% if is_admin %}
-                    <a class="link-button" href="/export?search={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}">Export to Excel</a>
+                    <a class="link-button" href="/export?search={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}">Export to Excel</a>
                     {% endif %}
                 </div>
             </form>
@@ -410,7 +433,7 @@
                     <thead>
                         <tr>
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=name&sort_dir={{ next_dir('name') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=name&sort_dir={{ next_dir('name') }}">
                                     Player
                                     {% if sort_by == "name" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -423,7 +446,7 @@
                             {% endif %}
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=rank&sort_dir={{ next_dir('rank') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=rank&sort_dir={{ next_dir('rank') }}">
                                     Rank
                                     {% if sort_by == "rank" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -432,7 +455,7 @@
                             </th>
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=might&sort_dir={{ next_dir('might') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=might&sort_dir={{ next_dir('might') }}">
                                     Might
                                     {% if sort_by == "might" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -441,7 +464,7 @@
                             </th>
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=kills&sort_dir={{ next_dir('kills') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=kills&sort_dir={{ next_dir('kills') }}">
                                     Kills
                                     {% if sort_by == "kills" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -450,7 +473,7 @@
                             </th>
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=edm&sort_dir={{ next_dir('edm') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=edm&sort_dir={{ next_dir('edm') }}">
                                     EDM
                                     {% if sort_by == "edm" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>

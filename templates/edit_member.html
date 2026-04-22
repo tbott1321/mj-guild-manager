@@ -135,6 +135,10 @@
             color: #4338ca;
         }
 
+        .comm-field {
+            display: none;
+        }
+
         @media (max-width: 760px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -150,6 +154,28 @@
             }
         }
     </style>
+    <script>
+        function updateEditCommFields() {
+            const method = document.getElementById("communication_method");
+            const wa = document.getElementById("whatsapp_wrap");
+            const dc = document.getElementById("discord_wrap");
+            if (!method || !wa || !dc) return;
+
+            wa.style.display = "none";
+            dc.style.display = "none";
+
+            if (method.value === "WhatsApp") {
+                wa.style.display = "block";
+            } else if (method.value === "Discord") {
+                dc.style.display = "block";
+            } else if (method.value === "Both") {
+                wa.style.display = "block";
+                dc.style.display = "block";
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", updateEditCommFields);
+    </script>
 </head>
 <body>
     <div class="topbar">
@@ -234,16 +260,22 @@
 
                     <div>
                         <label>Communication</label>
-                        <select name="communication_method" required>
+                        <select id="communication_method" name="communication_method" onchange="updateEditCommFields()" required>
                             <option value="WhatsApp" {% if (member.communication_method or 'N/A') == 'WhatsApp' %}selected{% endif %}>WhatsApp</option>
                             <option value="Discord" {% if (member.communication_method or 'N/A') == 'Discord' %}selected{% endif %}>Discord</option>
+                            <option value="Both" {% if (member.communication_method or 'N/A') == 'Both' %}selected{% endif %}>Both</option>
                             <option value="N/A" {% if (member.communication_method or 'N/A') == 'N/A' %}selected{% endif %}>N/A</option>
                         </select>
                     </div>
 
-                    <div>
-                        <label>Communication Username</label>
-                        <input name="communication_username" value="{{ member.communication_username or '' }}">
+                    <div id="whatsapp_wrap" class="comm-field">
+                        <label>WhatsApp Number</label>
+                        <input name="whatsapp_number" value="{{ member.whatsapp_number or '' }}">
+                    </div>
+
+                    <div id="discord_wrap" class="comm-field">
+                        <label>Discord Username</label>
+                        <input name="discord_username" value="{{ member.discord_username or '' }}">
                     </div>
 
                     <div class="full">
