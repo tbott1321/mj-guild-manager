@@ -209,6 +209,27 @@
         </div>
 
         <div class="stat-card">
+            <div class="stat-title">Guild Total Might</div>
+            <div class="stat-value">
+                {{ "{:,}".format(members | sum(attribute='might')) }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-title">Guild Total Kills</div>
+            <div class="stat-value">
+                {{ "{:,}".format(members | sum(attribute='kills')) }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-title">Guild Total EDM</div>
+            <div class="stat-value">
+                {{ "{:,}".format(members | sum(attribute='edm')) }}
+            </div>
+        </div>
+
+        <div class="stat-card">
             <div class="stat-title">Average Mana</div>
             <div class="stat-value">
                 {% if members %}
@@ -250,25 +271,25 @@
             <div class="filter-row">
                 <select name="rank_filter">
                     <option value="">All Ranks</option>
-                    <option value="RANK1">RANK1</option>
-                    <option value="RANK2">RANK2</option>
-                    <option value="RANK3">RANK3</option>
-                    <option value="RANK4">RANK4</option>
-                    <option value="RANK5">RANK5</option>
+                    <option value="RANK1" {% if rank_filter == "RANK1" %}selected{% endif %}>RANK1</option>
+                    <option value="RANK2" {% if rank_filter == "RANK2" %}selected{% endif %}>RANK2</option>
+                    <option value="RANK3" {% if rank_filter == "RANK3" %}selected{% endif %}>RANK3</option>
+                    <option value="RANK4" {% if rank_filter == "RANK4" %}selected{% endif %}>RANK4</option>
+                    <option value="RANK5" {% if rank_filter == "RANK5" %}selected{% endif %}>RANK5</option>
                 </select>
 
                 <select name="alt_filter">
                     <option value="">All Accounts</option>
-                    <option value="yes">Alt Accounts</option>
-                    <option value="no">Main Accounts</option>
+                    <option value="yes" {% if alt_filter == "yes" %}selected{% endif %}>Alt Accounts</option>
+                    <option value="no" {% if alt_filter == "no" %}selected{% endif %}>Main Accounts</option>
                 </select>
 
                 <select name="troop_comp_filter">
                     <option value="">All Troop Comps</option>
-                    <option value="Overweight">Overweight</option>
-                    <option value="Pass">Pass</option>
-                    <option value="Low">Low</option>
-                    <option value="N/A">N/A</option>
+                    <option value="Overweight" {% if troop_comp_filter == "Overweight" %}selected{% endif %}>Overweight</option>
+                    <option value="Pass" {% if troop_comp_filter == "Pass" %}selected{% endif %}>Pass</option>
+                    <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
+                    <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
                 </select>
 
                 <input
@@ -296,7 +317,6 @@
         </form>
     </div>
 
-    <!-- Desktop Table -->
     <table>
         <thead>
             <tr>
@@ -337,7 +357,6 @@
         </tbody>
     </table>
 
-    <!-- Mobile Cards -->
     <div class="mobile-card">
         {% for member in members %}
         <div class="player-card"
