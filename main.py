@@ -203,15 +203,10 @@ def build_members_query(
                 OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
-                OR LOWER(COALESCE(m.comments, '')) LIKE ?
-                OR LOWER(COALESCE(m.whatsapp_number, '')) LIKE ?
-                OR LOWER(COALESCE(m.discord_username, '')) LIKE ?
-                OR LOWER(COALESCE(m.troop_comp, '')) LIKE ?
-                OR LOWER(COALESCE(m.communication_method, '')) LIKE ?
             )
         """
         like_value = f"%{search.lower()}%"
-        params.extend([like_value] * 10)
+        params.extend([like_value] * 5)
 
     if rank_filter:
         sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
