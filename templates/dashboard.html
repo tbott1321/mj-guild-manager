@@ -86,20 +86,29 @@
             margin: 0;
         }
         .toolbar {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
-            flex-wrap: wrap;
-            align-items: center;
+            align-items: end;
             margin-bottom: 18px;
         }
-        .toolbar input {
+        .toolbar .full {
+            grid-column: 1 / -1;
+        }
+        .toolbar input,
+        .toolbar select {
+            width: 100%;
             padding: 12px 14px;
             border-radius: 12px;
             border: 1px solid #d1d5db;
             font-size: 14px;
             background: white;
-            flex: 1;
-            min-width: 260px;
+        }
+        .toolbar-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            grid-column: 1 / -1;
         }
         .button, .link-button, .small-link, .sort-link {
             display: inline-block;
@@ -142,15 +151,20 @@
         }
         tr.data-row { cursor: pointer; transition: background 0.15s ease; }
         tr.data-row:hover td { background: #f9fafb; }
+
         .pill {
             display: inline-block;
             padding: 6px 10px;
             border-radius: 999px;
-            background: #eef2ff;
-            color: #4338ca;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
         }
+        .rank-1 { background: #e5e7eb; color: #111827; }
+        .rank-2 { background: #dbeafe; color: #1e3a8a; }
+        .rank-3 { background: #dcfce7; color: #166534; }
+        .rank-4 { background: #ede9fe; color: #6b21a8; }
+        .rank-5 { background: #fef3c7; color: #92400e; }
+
         .danger { color: #dc2626; text-decoration: none; font-weight: 600; }
         .empty {
             padding: 18px;
@@ -174,15 +188,20 @@
         @media (max-width: 1250px) {
             .stats { grid-template-columns: repeat(3, 1fr); }
             .add-form { grid-template-columns: 1fr 1fr; }
+            .toolbar { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 900px) {
             .stats { grid-template-columns: repeat(2, 1fr); }
             .topbar-inner { flex-direction: column; align-items: flex-start; }
             .title-wrap { min-height: auto; }
+            .toolbar { grid-template-columns: 1fr; }
         }
         @media (max-width: 700px) {
             .stats { grid-template-columns: 1fr; }
             .add-form { grid-template-columns: 1fr; }
+            .toolbar-actions { flex-direction: column; align-items: stretch; }
+            .toolbar-actions a,
+            .toolbar-actions button { width: 100%; text-align: center; }
         }
     </style>
 </head>
@@ -230,6 +249,16 @@
                 desc
             {%- else -%}
                 asc
+            {%- endif -%}
+        {%- endmacro %}
+
+        {% macro rank_class(rank_value) -%}
+            {%- if rank_value == "RANK1" -%}rank-1
+            {%- elif rank_value == "RANK2" -%}rank-2
+            {%- elif rank_value == "RANK3" -%}rank-3
+            {%- elif rank_value == "RANK4" -%}rank-4
+            {%- elif rank_value == "RANK5" -%}rank-5
+            {%- else -%}rank-1
             {%- endif -%}
         {%- endmacro %}
 
@@ -324,11 +353,53 @@
             <div class="click-note">Click anywhere on a player row to open their profile.</div>
 
             <form class="toolbar" method="get" action="/">
+                <div class="full">
+                    <input type="text" name="search" value="{{ search or '' }}" placeholder="Search by name, rank, stats, comments, troop comp, communication username">
+                </div>
+
+                <select name="rank_filter">
+                    <option value="">All Ranks</option>
+                    <option value="RANK1" {% if rank_filter == "RANK1" %}selected{% endif %}>RANK1</option>
+                    <option value="RANK2" {% if rank_filter == "RANK2" %}selected{% endif %}>RANK2</option>
+                    <option value="RANK3" {% if rank_filter == "RANK3" %}selected{% endif %}>RANK3</option>
+                    <option value="RANK4" {% if rank_filter == "RANK4" %}selected{% endif %}>RANK4</option>
+                    <option value="RANK5" {% if rank_filter == "RANK5" %}selected{% endif %}>RANK5</option>
+                </select>
+
+                <select name="alt_filter">
+                    <option value="">All Accounts</option>
+                    <option value="yes" {% if alt_filter == "yes" %}selected{% endif %}>Alt Accounts Only</option>
+                    <option value="no" {% if alt_filter == "no" %}selected{% endif %}>Main Accounts Only</option>
+                </select>
+
+                <select name="troop_comp_filter">
+                    <option value="">All Troop Comp</option>
+                    <option value="Overweight" {% if troop_comp_filter == "Overweight" %}selected{% endif %}>Overweight</option>
+                    <option value="Pass" {% if troop_comp_filter == "Pass" %}selected{% endif %}>Pass</option>
+                    <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
+                    <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
+                </select>
+
+                <select name="communication_filter">
+                    <option value="">All Communication</option>
+                    <option value="WhatsApp" {% if communication_filter == "WhatsApp" %}selected{% endif %}>WhatsApp</option>
+                    <option value="Discord" {% if communication_filter == "Discord" %}selected{% endif %}>Discord</option>
+                    <option value="N/A" {% if communication_filter == "N/A" %}selected{% endif %}>N/A</option>
+                </select>
+
+                <input type="number" min="0" max="6" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
+                <input type="number" min="0" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
+
                 <input type="hidden" name="sort_by" value="{{ sort_by }}">
                 <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
-                <input type="text" name="search" value="{{ search or '' }}" placeholder="Search by name, rank, stats, or comments">
-                <button class="button" type="submit">Search</button>
-                <a class="link-button" href="/">Clear</a>
+
+                <div class="toolbar-actions">
+                    <button class="button" type="submit">Apply Filters</button>
+                    <a class="link-button" href="/">Clear</a>
+                    {% if is_admin %}
+                    <a class="link-button" href="/export?search={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}">Export to Excel</a>
+                    {% endif %}
+                </div>
             </form>
 
             {% if members|length == 0 %}
@@ -339,7 +410,7 @@
                     <thead>
                         <tr>
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&sort_by=name&sort_dir={{ next_dir('name') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=name&sort_dir={{ next_dir('name') }}">
                                     Player
                                     {% if sort_by == "name" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -352,7 +423,7 @@
                             {% endif %}
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&sort_by=rank&sort_dir={{ next_dir('rank') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=rank&sort_dir={{ next_dir('rank') }}">
                                     Rank
                                     {% if sort_by == "rank" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -361,7 +432,7 @@
                             </th>
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&sort_by=might&sort_dir={{ next_dir('might') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=might&sort_dir={{ next_dir('might') }}">
                                     Might
                                     {% if sort_by == "might" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -370,7 +441,7 @@
                             </th>
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&sort_by=kills&sort_dir={{ next_dir('kills') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=kills&sort_dir={{ next_dir('kills') }}">
                                     Kills
                                     {% if sort_by == "kills" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -379,7 +450,7 @@
                             </th>
 
                             <th>
-                                <a class="sort-link" href="/?search={{ search }}&sort_by=edm&sort_dir={{ next_dir('edm') }}">
+                                <a class="sort-link" href="/?search={{ search }}&rank_filter={{ rank_filter }}&alt_filter={{ alt_filter }}&troop_comp_filter={{ troop_comp_filter }}&communication_filter={{ communication_filter }}&min_mana={{ min_mana }}&min_sigils={{ min_sigils }}&sort_by=edm&sort_dir={{ next_dir('edm') }}">
                                     EDM
                                     {% if sort_by == "edm" %}
                                         <span class="sort-indicator">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
@@ -403,7 +474,7 @@
                             <td>{{ m.igg_id }}</td>
                             {% endif %}
 
-                            <td><span class="pill">{{ m.rank or "RANK1" }}</span></td>
+                            <td><span class="pill {{ rank_class(m.rank or 'RANK1') }}">{{ m.rank or "RANK1" }}</span></td>
                             <td>{{ "{:,}".format(m.might or 0) }}</td>
                             <td>{{ "{:,}".format(m.kills or 0) }}</td>
                             <td>{{ "{:,}".format(m.edm or 0) }}</td>

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form, UploadFile, File, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
@@ -7,6 +7,7 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 import os
+from io import BytesIO
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-this")
@@ -165,16 +166,17 @@ def get_sort_sql(sort_by: str, sort_dir: str):
         return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
-@app.get("/", response_class=HTMLResponse)
-def dashboard(
-    request: Request,
-    search: str = Query(default=""),
-    sort_by: str = Query(default="might"),
-    sort_dir: str = Query(default="desc")
+def build_members_query(
+    search: str = "",
+    rank_filter: str = "",
+    alt_filter: str = "",
+    troop_comp_filter: str = "",
+    communication_filter: str = "",
+    min_mana: str = "",
+    min_sigils: str = "",
+    sort_by: str = "might",
+    sort_dir: str = "desc"
 ):
-    conn = get_conn()
-    c = conn.cursor()
-
     sql = """
         SELECT
             m.*,
@@ -184,25 +186,93 @@ def dashboard(
                 WHERE nh.igg_id = m.igg_id
             ) AS last_name_change
         FROM members m
+        WHERE 1=1
     """
-
     params = []
-    search = (search or "").strip()
 
+    search = (search or "").strip()
     if search:
         sql += """
-            WHERE
+            AND (
                 LOWER(COALESCE(m.name, '')) LIKE ?
                 OR LOWER(COALESCE(m.rank, '')) LIKE ?
                 OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
                 OR LOWER(COALESCE(m.comments, '')) LIKE ?
+                OR LOWER(COALESCE(m.communication_username, '')) LIKE ?
+                OR LOWER(COALESCE(m.troop_comp, '')) LIKE ?
+                OR LOWER(COALESCE(m.communication_method, '')) LIKE ?
+            )
         """
         like_value = f"%{search.lower()}%"
-        params.extend([like_value, like_value, like_value, like_value, like_value, like_value])
+        params.extend([
+            like_value, like_value, like_value, like_value, like_value,
+            like_value, like_value, like_value, like_value
+        ])
+
+    if rank_filter:
+        sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
+        params.append(rank_filter.upper())
+
+    if alt_filter == "yes":
+        sql += " AND COALESCE(m.alt_account, 0) = 1"
+    elif alt_filter == "no":
+        sql += " AND COALESCE(m.alt_account, 0) = 0"
+
+    if troop_comp_filter:
+        sql += " AND COALESCE(m.troop_comp, 'N/A') = ?"
+        params.append(troop_comp_filter)
+
+    if communication_filter:
+        sql += " AND COALESCE(m.communication_method, 'N/A') = ?"
+        params.append(communication_filter)
+
+    if min_mana != "":
+        try:
+            sql += " AND COALESCE(m.mana, 0) >= ?"
+            params.append(int(min_mana))
+        except ValueError:
+            pass
+
+    if min_sigils != "":
+        try:
+            sql += " AND COALESCE(m.sigils, 0) >= ?"
+            params.append(int(min_sigils))
+        except ValueError:
+            pass
 
     sql += f" ORDER BY {get_sort_sql(sort_by, sort_dir)}"
+    return sql, params
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard(
+    request: Request,
+    search: str = Query(default=""),
+    sort_by: str = Query(default="might"),
+    sort_dir: str = Query(default="desc"),
+    rank_filter: str = Query(default=""),
+    alt_filter: str = Query(default=""),
+    troop_comp_filter: str = Query(default=""),
+    communication_filter: str = Query(default=""),
+    min_mana: str = Query(default=""),
+    min_sigils: str = Query(default="")
+):
+    conn = get_conn()
+    c = conn.cursor()
+
+    sql, params = build_members_query(
+        search=search,
+        rank_filter=rank_filter,
+        alt_filter=alt_filter,
+        troop_comp_filter=troop_comp_filter,
+        communication_filter=communication_filter,
+        min_mana=min_mana,
+        min_sigils=min_sigils,
+        sort_by=sort_by,
+        sort_dir=sort_dir
+    )
 
     c.execute(sql, params)
     members = c.fetchall()
@@ -216,8 +286,70 @@ def dashboard(
             "search": search,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
+            "rank_filter": rank_filter,
+            "alt_filter": alt_filter,
+            "troop_comp_filter": troop_comp_filter,
+            "communication_filter": communication_filter,
+            "min_mana": min_mana,
+            "min_sigils": min_sigils,
             "is_admin": is_admin(request)
         }
+    )
+
+
+@app.get("/export")
+def export_members(
+    request: Request,
+    search: str = Query(default=""),
+    sort_by: str = Query(default="might"),
+    sort_dir: str = Query(default="desc"),
+    rank_filter: str = Query(default=""),
+    alt_filter: str = Query(default=""),
+    troop_comp_filter: str = Query(default=""),
+    communication_filter: str = Query(default=""),
+    min_mana: str = Query(default=""),
+    min_sigils: str = Query(default="")
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    sql, params = build_members_query(
+        search=search,
+        rank_filter=rank_filter,
+        alt_filter=alt_filter,
+        troop_comp_filter=troop_comp_filter,
+        communication_filter=communication_filter,
+        min_mana=min_mana,
+        min_sigils=min_sigils,
+        sort_by=sort_by,
+        sort_dir=sort_dir
+    )
+    df = pd.read_sql_query(sql, conn, params=params)
+    conn.close()
+
+    export_cols = [
+        "name", "igg_id", "rank", "might", "kills", "edm",
+        "mana", "sigils", "alt_account", "troop_comp",
+        "communication_method", "communication_username",
+        "comments", "created_at", "updated_at", "last_name_change"
+    ]
+    df = df[[col for col in export_cols if col in df.columns]]
+
+    if "alt_account" in df.columns:
+        df["alt_account"] = df["alt_account"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Members")
+
+    output.seek(0)
+    filename = f"mj_guild_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
