@@ -398,7 +398,6 @@ def get_watchlist_recommendations(conn):
 def get_dashboard_insights(conn):
     c = conn.cursor()
 
-    # Watchlist count
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM members
@@ -406,7 +405,6 @@ def get_dashboard_insights(conn):
     """)
     watchlist_count = c.fetchone()["cnt"] or 0
 
-    # Latest kill report fails
     c.execute("""
         SELECT COUNT(DISTINCT igg_id) AS cnt
         FROM kill_report_rows
@@ -420,7 +418,6 @@ def get_dashboard_insights(conn):
     """)
     latest_kill_fail_count = c.fetchone()["cnt"] or 0
 
-    # Latest guild fest fails
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM guild_fest_report_rows
@@ -434,7 +431,6 @@ def get_dashboard_insights(conn):
     """)
     latest_gf_fail_count = c.fetchone()["cnt"] or 0
 
-    # Low mana = below Mana 1
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM members
@@ -442,7 +438,6 @@ def get_dashboard_insights(conn):
     """)
     low_mana_count = c.fetchone()["cnt"] or 0
 
-    # Low sigils = below 80
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM members
@@ -539,26 +534,6 @@ def dashboard(
     )
 
 
-@app.post("/member/{igg_id}/watchlist")
-def toggle_watchlist(
-    request: Request,
-    igg_id: str,
-    watchlist_flag: int = Form(...)
-):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    conn = get_conn()
-    conn.execute(
-        "UPDATE members SET watchlist_flag = ?, updated_at = ? WHERE igg_id = ?",
-        (1 if int(watchlist_flag) == 1 else 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id)
-    )
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url=f"/member/{igg_id}", status_code=302)
-
-
 @app.get("/member/{igg_id}", response_class=HTMLResponse)
 def member_page(request: Request, igg_id: str):
     conn = get_conn()
@@ -611,6 +586,168 @@ def member_page(request: Request, igg_id: str):
             "is_admin": is_admin(request)
         }
     )
+
+
+@app.get("/member/{igg_id}/edit", response_class=HTMLResponse)
+def edit_page(request: Request, igg_id: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
+    member = c.fetchone()
+    conn.close()
+
+    if not member:
+        return HTMLResponse("<h2>Member not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "edit_member.html",
+        {
+            "member": member,
+            "is_admin": True
+        }
+    )
+
+
+@app.post("/member/{igg_id}/edit")
+def edit_member(
+    request: Request,
+    igg_id: str,
+    name: str = Form(...),
+    rank: str = Form(...),
+    might: int = Form(...),
+    kills: int = Form(...),
+    edm: int = Form(...),
+    mana: int = Form(...),
+    sigils: int = Form(...),
+    alt_account: str | None = Form(default=None),
+    troop_comp: str = Form("N/A"),
+    communication_method: str = Form("N/A"),
+    whatsapp_number: str = Form(""),
+    discord_username: str = Form(""),
+    comments: str = Form("")
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    mana = max(0, min(6, int(mana)))
+    sigils = max(0, int(sigils))
+    alt_account_value = 1 if alt_account else 0
+    communication_method, whatsapp_number, discord_username = normalise_comm_fields(
+        communication_method, whatsapp_number, discord_username
+    )
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT name, watchlist_flag FROM members WHERE igg_id = ?", (igg_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return HTMLResponse("<h2>Member not found</h2>", status_code=404)
+
+    old_name = row["name"]
+    existing_watchlist = 0 if row["watchlist_flag"] is None else int(row["watchlist_flag"])
+    log_name_change(conn, igg_id, old_name, name)
+
+    c.execute("""
+        UPDATE members
+        SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
+            alt_account = ?, troop_comp = ?, communication_method = ?, whatsapp_number = ?, discord_username = ?,
+            comments = ?, watchlist_flag = ?, updated_at = ?
+        WHERE igg_id = ?
+    """, (
+        name, rank, might, kills, edm, mana, sigils,
+        alt_account_value, troop_comp, communication_method, whatsapp_number, discord_username,
+        comments, existing_watchlist, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url=f"/member/{igg_id}", status_code=302)
+
+
+@app.post("/add")
+def add_member(
+    request: Request,
+    name: str = Form(...),
+    igg_id: str = Form(...),
+    rank: str = Form(...),
+    might: int = Form(...),
+    kills: int = Form(...),
+    edm: int = Form(...),
+    mana: int = Form(0),
+    sigils: int = Form(0),
+    alt_account: str | None = Form(default=None),
+    troop_comp: str = Form("N/A"),
+    communication_method: str = Form("N/A"),
+    whatsapp_number: str = Form(""),
+    discord_username: str = Form(""),
+    comments: str = Form("")
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    mana = max(0, min(6, int(mana)))
+    sigils = max(0, int(sigils))
+    alt_account_value = 1 if alt_account else 0
+    communication_method, whatsapp_number, discord_username = normalise_comm_fields(
+        communication_method, whatsapp_number, discord_username
+    )
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = get_conn()
+    conn.execute("""
+        INSERT OR REPLACE INTO members
+        (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
+         communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        igg_id, name, rank, might, kills, edm, mana, sigils, alt_account_value, troop_comp,
+        communication_method, whatsapp_number, discord_username, 0, comments, now, now
+    ))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/delete/{igg_id}")
+def delete_member(request: Request, igg_id: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    conn.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
+    conn.execute("DELETE FROM name_history WHERE igg_id = ?", (igg_id,))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.post("/member/{igg_id}/watchlist")
+def toggle_watchlist(
+    request: Request,
+    igg_id: str,
+    watchlist_flag: int = Form(...)
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    conn.execute(
+        "UPDATE members SET watchlist_flag = ?, updated_at = ? WHERE igg_id = ?",
+        (1 if int(watchlist_flag) == 1 else 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id)
+    )
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url=f"/member/{igg_id}", status_code=302)
 
 
 @app.get("/reports/archive", response_class=HTMLResponse)
@@ -679,7 +816,6 @@ async def restore_backup(request: Request, file: UploadFile = File(...)):
         with open(tmp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Validate uploaded DB
         test_conn = sqlite3.connect(tmp_path)
         test_cursor = test_conn.cursor()
         test_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='members'")
@@ -1095,4 +1231,62 @@ def view_guild_fest_report(request: Request, report_id: int):
         request,
         "guild_fest_report.html",
         {"report": report, "rows": rows, "is_admin": is_admin(request)}
+    )
+
+
+@app.get("/export")
+def export_members(
+    request: Request,
+    search: str = Query(default=""),
+    sort_by: str = Query(default="might"),
+    sort_dir: str = Query(default="desc"),
+    rank_filter: str = Query(default=""),
+    alt_filter: str = Query(default=""),
+    troop_comp_filter: str = Query(default=""),
+    min_mana: str = Query(default=""),
+    min_sigils: str = Query(default=""),
+    watchlist_only: str = Query(default="")
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    sql, params = build_members_query(
+        search=search,
+        rank_filter=rank_filter,
+        alt_filter=alt_filter,
+        troop_comp_filter=troop_comp_filter,
+        min_mana=min_mana,
+        min_sigils=min_sigils,
+        watchlist_only=watchlist_only,
+        sort_by=sort_by,
+        sort_dir=sort_dir
+    )
+    df = pd.read_sql_query(sql, conn, params=params)
+    conn.close()
+
+    export_cols = [
+        "name", "igg_id", "rank", "might", "kills", "edm",
+        "mana", "sigils", "alt_account", "troop_comp",
+        "communication_method", "whatsapp_number", "discord_username",
+        "watchlist_flag", "comments", "created_at", "updated_at", "last_name_change"
+    ]
+    df = df[[col for col in export_cols if col in df.columns]]
+
+    if "alt_account" in df.columns:
+        df["alt_account"] = df["alt_account"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
+    if "watchlist_flag" in df.columns:
+        df["watchlist_flag"] = df["watchlist_flag"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Members")
+
+    output.seek(0)
+    filename = f"mj_guild_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
