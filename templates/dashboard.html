@@ -34,6 +34,10 @@
             font-weight: bold;
             font-size: 14px;
         }
+        .btn-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
         .container {
             padding: 20px;
         }
@@ -251,6 +255,7 @@
             <a href="/pending-members" class="btn">Pending Members</a>
             <a href="/backup" class="btn">Backup / Restore</a>
             <a href="/reports/archive" class="btn">Report Archive</a>
+            <a href="/admin/delete-all" class="btn btn-danger">Delete All Players</a>
             <a href="/admin/logout" class="btn">Logout</a>
         {% else %}
             <a href="/reports/archive" class="btn">Report Archive</a>

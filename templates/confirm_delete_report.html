@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Report</title>
+</head>
+<body>
+
+<h1>Delete Report</h1>
+
+<p>
+This report will be permanently deleted:
+</p>
+
+<ul>
+    <li>Name: {{ report.report_name }}</li>
+    <li>Date: {{ report.generated_at }}</li>
+</ul>
+
+<form action="/reports/delete/{{ report_type }}/{{ report.id }}" method="post">
+    <button type="submit">
+        Confirm Delete
+    </button>
+</form>
+
+<br>
+<a href="/reports/archive">Cancel</a>
+
+</body>
+</html>

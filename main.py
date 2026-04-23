@@ -7,7 +7,6 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 import os
-from io import BytesIO
 import shutil
 import tempfile
 
@@ -278,10 +277,9 @@ def get_sort_sql(sort_by: str, sort_dir: str):
 
     if sort_by == "name":
         return f"{sort_column} {direction}, COALESCE(might, 0) DESC"
-    elif sort_by == "rank":
+    if sort_by == "rank":
         return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
-    else:
-        return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
+    return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
 def build_members_query(
@@ -516,7 +514,12 @@ def dashboard(
     dashboard_insights = {}
 
     if is_admin(request):
-        c.execute("SELECT igg_id, name, watchlist_flag FROM members WHERE COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)")
+        c.execute("""
+            SELECT igg_id, name, watchlist_flag
+            FROM members
+            WHERE COALESCE(watchlist_flag, 0) = 1
+            ORDER BY LOWER(name)
+        """)
         watchlisted = c.fetchall()
         for member in watchlisted:
             stats = get_member_fail_stats(conn, member["igg_id"], member["name"])
@@ -870,65 +873,89 @@ def report_archive(request: Request):
     )
 
 
-@app.get("/backup", response_class=HTMLResponse)
-def backup_page(request: Request):
+@app.get("/reports/delete/{report_type}/{report_id}", response_class=HTMLResponse)
+def confirm_delete_report_page(request: Request, report_type: str, report_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    if report_type not in ["kills", "guildfest"]:
+        return HTMLResponse("<h2>Invalid report type</h2>", status_code=400)
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    if report_type == "kills":
+        c.execute("SELECT * FROM kill_reports WHERE id = ?", (report_id,))
+    else:
+        c.execute("SELECT * FROM guild_fest_reports WHERE id = ?", (report_id,))
+
+    report = c.fetchone()
+    conn.close()
+
+    if not report:
+        return HTMLResponse("<h2>Report not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "confirm_delete_report.html",
+        {
+            "report": report,
+            "report_type": report_type,
+            "is_admin": True
+        }
+    )
+
+
+@app.post("/reports/delete/{report_type}/{report_id}")
+def delete_report(request: Request, report_type: str, report_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    if report_type not in ["kills", "guildfest"]:
+        return HTMLResponse("<h2>Invalid report type</h2>", status_code=400)
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    if report_type == "kills":
+        c.execute("DELETE FROM kill_report_rows WHERE report_id = ?", (report_id,))
+        c.execute("DELETE FROM kill_reports WHERE id = ?", (report_id,))
+    else:
+        c.execute("DELETE FROM guild_fest_report_rows WHERE report_id = ?", (report_id,))
+        c.execute("DELETE FROM guild_fest_reports WHERE id = ?", (report_id,))
+
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/reports/archive", status_code=302)
+
+
+@app.get("/admin/delete-all", response_class=HTMLResponse)
+def confirm_delete_all_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     return templates.TemplateResponse(
         request,
-        "backup_restore.html",
+        "confirm_delete_all.html",
         {"is_admin": True}
     )
 
 
-@app.get("/backup/download")
-def download_backup(request: Request):
+@app.post("/admin/delete-all")
+def delete_all_players(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    filename = f"mj_guild_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM members")
+    c.execute("DELETE FROM pending_members")
+    c.execute("DELETE FROM name_history")
+    conn.commit()
+    conn.close()
 
-    return StreamingResponse(
-        open(DB_PATH, "rb"),
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-    )
-
-
-@app.post("/backup/restore")
-async def restore_backup(request: Request, file: UploadFile = File(...)):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    suffix = Path(file.filename or "backup.db").suffix.lower()
-    if suffix != ".db":
-        return HTMLResponse("<h2>Restore failed: please upload a .db backup file.</h2>", status_code=400)
-
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".db")
-    os.close(tmp_fd)
-
-    try:
-        with open(tmp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        test_conn = sqlite3.connect(tmp_path)
-        test_cursor = test_conn.cursor()
-        test_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='members'")
-        if not test_cursor.fetchone():
-            test_conn.close()
-            os.remove(tmp_path)
-            return HTMLResponse("<h2>Restore failed: uploaded file is not a valid MJ Guild Manager database.</h2>", status_code=400)
-        test_conn.close()
-
-        shutil.copyfile(tmp_path, DB_PATH)
-        os.remove(tmp_path)
-        return RedirectResponse(url="/backup", status_code=302)
-
-    except Exception as e:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        return HTMLResponse(f"<h2>Restore failed: {e}</h2>", status_code=500)
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/admin/login", response_class=HTMLResponse)
@@ -1354,7 +1381,6 @@ def download_backup(request: Request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     filename = f"mj_guild_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-
     return StreamingResponse(
         open(DB_PATH, "rb"),
         media_type="application/octet-stream",
