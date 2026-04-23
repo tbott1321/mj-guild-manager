@@ -8,6 +8,8 @@ import pandas as pd
 from datetime import datetime
 import os
 from io import BytesIO
+import shutil
+import tempfile
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-this")
@@ -374,6 +376,74 @@ def get_member_fail_stats(conn, igg_id: str, member_name: str):
     }
 
 
+def get_watchlist_recommendations(conn):
+    c = conn.cursor()
+    c.execute("SELECT igg_id, name, watchlist_flag FROM members ORDER BY LOWER(name)")
+    members = c.fetchall()
+
+    recommendations = []
+    for member in members:
+        if int(member["watchlist_flag"] or 0) == 1:
+            continue
+        stats = get_member_fail_stats(conn, member["igg_id"], member["name"])
+        if stats["kill_consistent_fail"] or stats["gf_consistent_fail"]:
+            recommendations.append({
+                "igg_id": member["igg_id"],
+                "name": member["name"],
+                **stats
+            })
+    return recommendations
+
+
+def get_dashboard_insights(conn):
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM members
+        WHERE COALESCE(watchlist_flag, 0) = 1
+    """)
+    watchlist_count = c.fetchone()["cnt"] or 0
+
+    c.execute("""
+        SELECT COUNT(DISTINCT igg_id) AS cnt
+        FROM kill_report_rows
+        WHERE report_id = (SELECT id FROM kill_reports ORDER BY generated_at DESC LIMIT 1)
+          AND overall_pass = 0
+    """)
+    latest_kill_fail_count = c.fetchone()["cnt"] or 0
+
+    c.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM guild_fest_report_rows
+        WHERE report_id = (SELECT id FROM guild_fest_reports ORDER BY generated_at DESC LIMIT 1)
+          AND passed = 0
+    """)
+    latest_gf_fail_count = c.fetchone()["cnt"] or 0
+
+    c.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM members
+        WHERE COALESCE(mana, 0) <= 2
+    """)
+    low_mana_count = c.fetchone()["cnt"] or 0
+
+    c.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM members
+        WHERE COALESCE(sigils, 0) <= 10
+    """)
+    low_sigils_count = c.fetchone()["cnt"] or 0
+
+    return {
+        "watchlist_count": watchlist_count,
+        "latest_kill_fail_count": latest_kill_fail_count,
+        "latest_gf_fail_count": latest_gf_fail_count,
+        "low_mana_count": low_mana_count,
+        "low_sigils_count": low_sigils_count
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(
     request: Request,
@@ -411,6 +481,9 @@ def dashboard(
     latest_guild_fest_report = c.fetchone()
 
     watchlist_summary = []
+    watchlist_recommendations = []
+    dashboard_insights = {}
+
     if is_admin(request):
         c.execute("SELECT igg_id, name, watchlist_flag FROM members WHERE COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)")
         watchlisted = c.fetchall()
@@ -421,6 +494,9 @@ def dashboard(
                 "name": member["name"],
                 **stats
             })
+
+        watchlist_recommendations = get_watchlist_recommendations(conn)
+        dashboard_insights = get_dashboard_insights(conn)
 
     conn.close()
 
@@ -441,6 +517,8 @@ def dashboard(
             "latest_kill_report": latest_kill_report,
             "latest_guild_fest_report": latest_guild_fest_report,
             "watchlist_summary": watchlist_summary,
+            "watchlist_recommendations": watchlist_recommendations,
+            "dashboard_insights": dashboard_insights,
             "is_admin": is_admin(request)
         }
     )
@@ -518,6 +596,92 @@ def member_page(request: Request, igg_id: str):
             "is_admin": is_admin(request)
         }
     )
+
+
+@app.get("/reports/archive", response_class=HTMLResponse)
+def report_archive(request: Request):
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM kill_reports ORDER BY generated_at DESC")
+    kill_reports = c.fetchall()
+
+    c.execute("SELECT * FROM guild_fest_reports ORDER BY generated_at DESC")
+    guild_fest_reports = c.fetchall()
+
+    conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "report_archive.html",
+        {
+            "kill_reports": kill_reports,
+            "guild_fest_reports": guild_fest_reports,
+            "is_admin": is_admin(request)
+        }
+    )
+
+
+@app.get("/backup", response_class=HTMLResponse)
+def backup_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    return templates.TemplateResponse(
+        request,
+        "backup_restore.html",
+        {"is_admin": True}
+    )
+
+
+@app.get("/backup/download")
+def download_backup(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    filename = f"mj_guild_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+
+    return StreamingResponse(
+        open(DB_PATH, "rb"),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@app.post("/backup/restore")
+async def restore_backup(request: Request, file: UploadFile = File(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    suffix = Path(file.filename or "backup.db").suffix.lower()
+    if suffix != ".db":
+        return HTMLResponse("<h2>Restore failed: please upload a .db backup file.</h2>", status_code=400)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".db")
+    os.close(tmp_fd)
+
+    try:
+        with open(tmp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Validate uploaded DB
+        test_conn = sqlite3.connect(tmp_path)
+        test_cursor = test_conn.cursor()
+        test_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='members'")
+        if not test_cursor.fetchone():
+            test_conn.close()
+            os.remove(tmp_path)
+            return HTMLResponse("<h2>Restore failed: uploaded file is not a valid MJ Guild Manager database.</h2>", status_code=400)
+        test_conn.close()
+
+        shutil.copyfile(tmp_path, DB_PATH)
+        os.remove(tmp_path)
+        return RedirectResponse(url="/backup", status_code=302)
+
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return HTMLResponse(f"<h2>Restore failed: {e}</h2>", status_code=500)
 
 
 @app.get("/admin/login", response_class=HTMLResponse)
@@ -916,62 +1080,4 @@ def view_guild_fest_report(request: Request, report_id: int):
         request,
         "guild_fest_report.html",
         {"report": report, "rows": rows, "is_admin": is_admin(request)}
-    )
-
-
-@app.get("/export")
-def export_members(
-    request: Request,
-    search: str = Query(default=""),
-    sort_by: str = Query(default="might"),
-    sort_dir: str = Query(default="desc"),
-    rank_filter: str = Query(default=""),
-    alt_filter: str = Query(default=""),
-    troop_comp_filter: str = Query(default=""),
-    min_mana: str = Query(default=""),
-    min_sigils: str = Query(default=""),
-    watchlist_only: str = Query(default="")
-):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    conn = get_conn()
-    sql, params = build_members_query(
-        search=search,
-        rank_filter=rank_filter,
-        alt_filter=alt_filter,
-        troop_comp_filter=troop_comp_filter,
-        min_mana=min_mana,
-        min_sigils=min_sigils,
-        watchlist_only=watchlist_only,
-        sort_by=sort_by,
-        sort_dir=sort_dir
-    )
-    df = pd.read_sql_query(sql, conn, params=params)
-    conn.close()
-
-    export_cols = [
-        "name", "igg_id", "rank", "might", "kills", "edm",
-        "mana", "sigils", "alt_account", "troop_comp",
-        "communication_method", "whatsapp_number", "discord_username",
-        "watchlist_flag", "comments", "created_at", "updated_at", "last_name_change"
-    ]
-    df = df[[col for col in export_cols if col in df.columns]]
-
-    if "alt_account" in df.columns:
-        df["alt_account"] = df["alt_account"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
-    if "watchlist_flag" in df.columns:
-        df["watchlist_flag"] = df["watchlist_flag"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
-
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Members")
-
-    output.seek(0)
-    filename = f"mj_guild_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-
-    return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )

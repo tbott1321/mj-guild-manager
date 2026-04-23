@@ -3,7 +3,6 @@
 <head>
     <title>MJ Guild Manager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
         body {
             font-family: Segoe UI, sans-serif;
@@ -11,25 +10,21 @@
             margin: 0;
             padding: 0;
         }
-
         .topbar {
             background: linear-gradient(135deg, #1e293b, #312e81);
             color: white;
             padding: 20px;
         }
-
         .topbar h1 {
             margin: 0;
             font-size: 28px;
         }
-
         .top-actions {
             margin-top: 15px;
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
         }
-
         .btn {
             background: white;
             color: #312e81;
@@ -39,53 +34,44 @@
             font-weight: bold;
             font-size: 14px;
         }
-
         .container {
             padding: 20px;
         }
-
-        .stats-box, .report-section, .search-box, .watchlist-box {
+        .stats-box, .report-section, .search-box, .watchlist-box, .insights-box, .recommend-box {
             background: white;
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 20px;
             box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
         }
-
         .stats-box {
             display: flex;
             flex-wrap: wrap;
             gap: 20px;
         }
-
         .stat-card {
             flex: 1;
             min-width: 180px;
         }
-
         .stat-title {
             color: gray;
             font-size: 14px;
         }
-
         .stat-value {
             font-size: 24px;
             font-weight: bold;
         }
-
-        .report-section h2, .watchlist-box h2 {
+        .report-section h2, .watchlist-box h2, .insights-box h2, .recommend-box h2 {
             margin-top: 0;
             margin-bottom: 15px;
             font-size: 22px;
             color: #1e293b;
         }
-
         .report-buttons {
             display: flex;
             flex-wrap: wrap;
             gap: 12px;
         }
-
         .report-btn {
             background: #312e81;
             color: white;
@@ -95,24 +81,39 @@
             font-weight: bold;
             font-size: 14px;
         }
-
         .report-btn.secondary {
             background: #475569;
         }
-
         .report-meta {
             margin-top: 15px;
             color: gray;
             font-size: 14px;
         }
-
+        .insight-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+        }
+        .insight-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .insight-label {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+        .insight-value {
+            font-size: 22px;
+            font-weight: 700;
+        }
         .search-row {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             margin-bottom: 15px;
         }
-
         .search-row input,
         .filter-row input,
         .filter-row select {
@@ -120,17 +121,14 @@
             border: 1px solid #ddd;
             border-radius: 8px;
         }
-
         .search-row input {
             flex: 1;
         }
-
         .filter-row {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
         }
-
         .search-btn {
             background: #312e81;
             color: white;
@@ -139,7 +137,6 @@
             border-radius: 8px;
             cursor: pointer;
         }
-
         .reset-btn {
             background: #ddd;
             color: black;
@@ -147,19 +144,31 @@
             padding: 10px 16px;
             border-radius: 8px;
         }
-
-        .watch-item {
+        .watch-item, .recommend-item {
             padding: 12px 14px;
             border: 1px solid #eee;
             border-radius: 10px;
             margin-bottom: 10px;
             background: #fffdf7;
         }
-
-        .watch-item strong {
+        .watch-item strong, .recommend-item strong {
             color: #92400e;
         }
-
+        .recommend-actions {
+            margin-top: 8px;
+        }
+        .mini-btn {
+            display: inline-block;
+            background: #312e81;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -168,32 +177,26 @@
             overflow: hidden;
             box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
         }
-
         th {
             background: #1e293b;
             color: white;
             padding: 14px;
             text-align: left;
         }
-
         th a {
             color: white;
             text-decoration: none;
         }
-
         td {
             padding: 14px;
             border-bottom: 1px solid #eee;
         }
-
         tr.clickable-row {
             cursor: pointer;
         }
-
         tr.clickable-row:hover {
             background: #f8fafc;
         }
-
         .watch-pill {
             display: inline-block;
             margin-left: 8px;
@@ -204,20 +207,21 @@
             font-size: 12px;
             font-weight: bold;
         }
-
         .mobile-card {
             display: none;
         }
-
+        @media (max-width: 1000px) {
+            .insight-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
         @media (max-width: 768px) {
             table {
                 display: none;
             }
-
             .mobile-card {
                 display: block;
             }
-
             .player-card {
                 background: white;
                 padding: 15px;
@@ -226,9 +230,11 @@
                 box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
                 cursor: pointer;
             }
-
             .report-buttons {
                 flex-direction: column;
+            }
+            .insight-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -241,9 +247,11 @@
     <div class="top-actions">
         {% if is_admin %}
             <a href="/import" class="btn">Import</a>
-            <a href="/export" class="btn">Export</a>
+            <a href="/backup" class="btn">Backup / Restore</a>
+            <a href="/reports/archive" class="btn">Report Archive</a>
             <a href="/admin/logout" class="btn">Logout</a>
         {% else %}
+            <a href="/reports/archive" class="btn">Report Archive</a>
             <a href="/admin/login" class="btn">Admin Login</a>
         {% endif %}
     </div>
@@ -329,8 +337,60 @@
     </div>
 
     {% if is_admin %}
+    <div class="insights-box">
+        <h2>Admin Quick Insights</h2>
+        <div class="insight-grid">
+            <div class="insight-card">
+                <div class="insight-label">Watchlist</div>
+                <div class="insight-value">{{ dashboard_insights.watchlist_count }}</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Latest Kill Report Fails</div>
+                <div class="insight-value">{{ dashboard_insights.latest_kill_fail_count }}</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Latest Guild Fest Fails</div>
+                <div class="insight-value">{{ dashboard_insights.latest_gf_fail_count }}</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Low Mana (≤2)</div>
+                <div class="insight-value">{{ dashboard_insights.low_mana_count }}</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Low Sigils (≤10)</div>
+                <div class="insight-value">{{ dashboard_insights.low_sigils_count }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="recommend-box">
+        <h2>Auto Watchlist Recommendations</h2>
+        {% if watchlist_recommendations|length == 0 %}
+            <div style="color: gray;">No automatic watchlist recommendations right now.</div>
+        {% else %}
+            {% for item in watchlist_recommendations %}
+                <div class="recommend-item">
+                    <strong>{{ item.name }}</strong><br>
+                    Kill report fails: {{ item.kill_fail }} / {{ item.kill_total }}
+                    {% if item.kill_consistent_fail %} — consistently failing{% endif %}
+                    <br>
+                    Guild Fest fails: {{ item.gf_fail }} / {{ item.gf_total }}
+                    {% if item.gf_consistent_fail %} — consistently failing{% endif %}
+
+                    <div class="recommend-actions">
+                        <form action="/member/{{ item.igg_id }}/watchlist" method="post" style="display:inline;">
+                            <input type="hidden" name="watchlist_flag" value="1">
+                            <button type="submit" class="mini-btn">Add to Watchlist</button>
+                        </form>
+                        <a href="/member/{{ item.igg_id }}" class="mini-btn" style="background:#475569;">Open Profile</a>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
     <div class="watchlist-box">
-        <h2>Admin Monitoring</h2>
+        <h2>Current Watchlist</h2>
         {% if watchlist_summary|length == 0 %}
             <div style="color: gray;">No players are currently on the watchlist.</div>
         {% else %}

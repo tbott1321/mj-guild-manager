@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup & Restore</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+        }
+        .topbar-inner {
+            max-width: 1000px; margin: 0 auto; display: flex;
+            justify-content: space-between; align-items: center; gap: 20px;
+        }
+        .title { font-size: 28px; font-weight: 700; }
+        .back {
+            text-decoration: none; color: white; background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15); padding: 10px 16px; border-radius: 12px; font-weight: 600;
+        }
+        .container { max-width: 1000px; margin: 24px auto; padding: 0 20px 24px; }
+        .card {
+            background: white; border-radius: 18px; padding: 22px;
+            box-shadow: 0 10px 24px rgba(15,23,42,.06); margin-bottom: 24px;
+        }
+        .card h2 { margin-top: 0; }
+        .muted { color: #6b7280; line-height: 1.6; }
+        .button, .link-button {
+            display: inline-block; text-decoration: none; border: none; border-radius: 12px;
+            padding: 12px 16px; font-weight: 600; cursor: pointer;
+        }
+        .button { background: linear-gradient(135deg, #6366f1, #7c3aed); color: white; }
+        .link-button { background: #eef2ff; color: #4338ca; }
+        input[type="file"] {
+            width: 100%; padding: 12px 14px; border-radius: 12px;
+            border: 1px solid #d1d5db; font-size: 14px; background: white; margin: 14px 0 16px;
+        }
+        .warning {
+            margin-top: 16px; padding: 14px 16px; border-radius: 14px;
+            background: #fff7ed; color: #9a3412; line-height: 1.6;
+        }
+        @media (max-width: 760px) {
+            .topbar-inner { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Backup & Restore</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Download Backup</h2>
+            <div class="muted">
+                Download a full backup of your live MJ Guild Manager database.
+            </div>
+            <div style="margin-top:16px;">
+                <a class="button" href="/backup/download">Download Backup File</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Restore Backup</h2>
+            <div class="muted">
+                Upload a previously downloaded <strong>.db</strong> backup file to restore the system.
+            </div>
+
+            <form action="/backup/restore" method="post" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".db" required>
+                <button class="button" type="submit">Restore Backup</button>
+            </form>
+
+            <div class="warning">
+                Restoring a backup will overwrite the current live data.
+                Only restore files created from this app.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
