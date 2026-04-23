@@ -398,6 +398,7 @@ def get_watchlist_recommendations(conn):
 def get_dashboard_insights(conn):
     c = conn.cursor()
 
+    # Watchlist count
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM members
@@ -405,33 +406,47 @@ def get_dashboard_insights(conn):
     """)
     watchlist_count = c.fetchone()["cnt"] or 0
 
+    # Latest kill report fails
     c.execute("""
         SELECT COUNT(DISTINCT igg_id) AS cnt
         FROM kill_report_rows
-        WHERE report_id = (SELECT id FROM kill_reports ORDER BY generated_at DESC LIMIT 1)
-          AND overall_pass = 0
+        WHERE report_id = (
+            SELECT id
+            FROM kill_reports
+            ORDER BY generated_at DESC
+            LIMIT 1
+        )
+        AND overall_pass = 0
     """)
     latest_kill_fail_count = c.fetchone()["cnt"] or 0
 
+    # Latest guild fest fails
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM guild_fest_report_rows
-        WHERE report_id = (SELECT id FROM guild_fest_reports ORDER BY generated_at DESC LIMIT 1)
-          AND passed = 0
+        WHERE report_id = (
+            SELECT id
+            FROM guild_fest_reports
+            ORDER BY generated_at DESC
+            LIMIT 1
+        )
+        AND passed = 0
     """)
     latest_gf_fail_count = c.fetchone()["cnt"] or 0
 
+    # Low mana = below Mana 1
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM members
-        WHERE COALESCE(mana, 0) <= 2
+        WHERE COALESCE(mana, 0) < 1
     """)
     low_mana_count = c.fetchone()["cnt"] or 0
 
+    # Low sigils = below 80
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM members
-        WHERE COALESCE(sigils, 0) <= 10
+        WHERE COALESCE(sigils, 0) < 80
     """)
     low_sigils_count = c.fetchone()["cnt"] or 0
 
