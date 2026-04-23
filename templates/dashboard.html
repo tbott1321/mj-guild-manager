@@ -91,7 +91,7 @@
         }
         .insight-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(6, 1fr);
             gap: 14px;
         }
         .insight-card {
@@ -168,6 +168,7 @@
             font-weight: 600;
             border: none;
             cursor: pointer;
+            margin-right: 8px;
         }
         table {
             width: 100%;
@@ -210,9 +211,9 @@
         .mobile-card {
             display: none;
         }
-        @media (max-width: 1000px) {
+        @media (max-width: 1100px) {
             .insight-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
         }
         @media (max-width: 768px) {
@@ -247,6 +248,7 @@
     <div class="top-actions">
         {% if is_admin %}
             <a href="/import" class="btn">Import</a>
+            <a href="/pending-members" class="btn">Pending Members</a>
             <a href="/backup" class="btn">Backup / Restore</a>
             <a href="/reports/archive" class="btn">Report Archive</a>
             <a href="/admin/logout" class="btn">Logout</a>
@@ -345,6 +347,10 @@
                 <div class="insight-value">{{ dashboard_insights.watchlist_count }}</div>
             </div>
             <div class="insight-card">
+                <div class="insight-label">Pending Approvals</div>
+                <div class="insight-value">{{ dashboard_insights.pending_count }}</div>
+            </div>
+            <div class="insight-card">
                 <div class="insight-label">Latest Kill Report Fails</div>
                 <div class="insight-value">{{ dashboard_insights.latest_kill_fail_count }}</div>
             </div>
@@ -353,11 +359,11 @@
                 <div class="insight-value">{{ dashboard_insights.latest_gf_fail_count }}</div>
             </div>
             <div class="insight-card">
-                <div class="insight-label">Low Mana (<1)</div>
+                <div class="insight-label">Low Mana (&lt;1)</div>
                 <div class="insight-value">{{ dashboard_insights.low_mana_count }}</div>
             </div>
             <div class="insight-card">
-                <div class="insight-label">Low Sigils (<80)</div>
+                <div class="insight-label">Low Sigils (&lt;80)</div>
                 <div class="insight-value">{{ dashboard_insights.low_sigils_count }}</div>
             </div>
         </div>

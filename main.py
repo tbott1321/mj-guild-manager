@@ -65,6 +65,20 @@ def init_db():
     """)
 
     c.execute("""
+        CREATE TABLE IF NOT EXISTS pending_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            igg_id TEXT UNIQUE,
+            name TEXT,
+            rank TEXT,
+            might INTEGER,
+            kills INTEGER,
+            edm INTEGER,
+            source_filename TEXT,
+            imported_at TEXT
+        )
+    """)
+
+    c.execute("""
         CREATE TABLE IF NOT EXISTS name_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             igg_id TEXT,
@@ -445,12 +459,19 @@ def get_dashboard_insights(conn):
     """)
     low_sigils_count = c.fetchone()["cnt"] or 0
 
+    c.execute("""
+        SELECT COUNT(*) AS cnt
+        FROM pending_members
+    """)
+    pending_count = c.fetchone()["cnt"] or 0
+
     return {
         "watchlist_count": watchlist_count,
         "latest_kill_fail_count": latest_kill_fail_count,
         "latest_gf_fail_count": latest_gf_fail_count,
         "low_mana_count": low_mana_count,
-        "low_sigils_count": low_sigils_count
+        "low_sigils_count": low_sigils_count,
+        "pending_count": pending_count
     }
 
 
@@ -532,6 +553,81 @@ def dashboard(
             "is_admin": is_admin(request)
         }
     )
+
+
+@app.get("/pending-members", response_class=HTMLResponse)
+def pending_members_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM pending_members ORDER BY imported_at DESC, LOWER(name) ASC")
+    pending_members = c.fetchall()
+    conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "pending_members.html",
+        {
+            "pending_members": pending_members,
+            "is_admin": True
+        }
+    )
+
+
+@app.post("/pending-members/{pending_id}/approve")
+def approve_pending_member(request: Request, pending_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM pending_members WHERE id = ?", (pending_id,))
+    pending = c.fetchone()
+
+    if not pending:
+        conn.close()
+        return HTMLResponse("<h2>Pending member not found</h2>", status_code=404)
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+        INSERT OR REPLACE INTO members
+        (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
+         communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        pending["igg_id"],
+        pending["name"],
+        pending["rank"],
+        pending["might"],
+        pending["kills"],
+        pending["edm"],
+        0, 0, 0, "N/A",
+        "N/A", "", "", 0, "", now, now
+    ))
+
+    c.execute("DELETE FROM pending_members WHERE id = ?", (pending_id,))
+
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/pending-members", status_code=302)
+
+
+@app.post("/pending-members/{pending_id}/reject")
+def reject_pending_member(request: Request, pending_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    conn.execute("DELETE FROM pending_members WHERE id = ?", (pending_id,))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/pending-members", status_code=302)
 
 
 @app.get("/member/{igg_id}", response_class=HTMLResponse)
@@ -978,13 +1074,19 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
             ))
         else:
             conn.execute("""
-                INSERT INTO members
-                (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
-                 communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO pending_members
+                (igg_id, name, rank, might, kills, edm, source_filename, imported_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(igg_id) DO UPDATE SET
+                    name = excluded.name,
+                    rank = excluded.rank,
+                    might = excluded.might,
+                    kills = excluded.kills,
+                    edm = excluded.edm,
+                    source_filename = excluded.source_filename,
+                    imported_at = excluded.imported_at
             """, (
-                igg_id, name, rank, might, kills, edm, 0, 0, 0, "N/A",
-                "N/A", "", "", 0, "", now, now
+                igg_id, name, rank, might, kills, edm, file.filename, now
             ))
 
     conn.commit()
@@ -1234,59 +1336,62 @@ def view_guild_fest_report(request: Request, report_id: int):
     )
 
 
-@app.get("/export")
-def export_members(
-    request: Request,
-    search: str = Query(default=""),
-    sort_by: str = Query(default="might"),
-    sort_dir: str = Query(default="desc"),
-    rank_filter: str = Query(default=""),
-    alt_filter: str = Query(default=""),
-    troop_comp_filter: str = Query(default=""),
-    min_mana: str = Query(default=""),
-    min_sigils: str = Query(default=""),
-    watchlist_only: str = Query(default="")
-):
+@app.get("/backup", response_class=HTMLResponse)
+def backup_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    conn = get_conn()
-    sql, params = build_members_query(
-        search=search,
-        rank_filter=rank_filter,
-        alt_filter=alt_filter,
-        troop_comp_filter=troop_comp_filter,
-        min_mana=min_mana,
-        min_sigils=min_sigils,
-        watchlist_only=watchlist_only,
-        sort_by=sort_by,
-        sort_dir=sort_dir
+    return templates.TemplateResponse(
+        request,
+        "backup_restore.html",
+        {"is_admin": True}
     )
-    df = pd.read_sql_query(sql, conn, params=params)
-    conn.close()
 
-    export_cols = [
-        "name", "igg_id", "rank", "might", "kills", "edm",
-        "mana", "sigils", "alt_account", "troop_comp",
-        "communication_method", "whatsapp_number", "discord_username",
-        "watchlist_flag", "comments", "created_at", "updated_at", "last_name_change"
-    ]
-    df = df[[col for col in export_cols if col in df.columns]]
 
-    if "alt_account" in df.columns:
-        df["alt_account"] = df["alt_account"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
-    if "watchlist_flag" in df.columns:
-        df["watchlist_flag"] = df["watchlist_flag"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
+@app.get("/backup/download")
+def download_backup(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
 
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Members")
-
-    output.seek(0)
-    filename = f"mj_guild_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"mj_guild_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
 
     return StreamingResponse(
-        output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        open(DB_PATH, "rb"),
+        media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+@app.post("/backup/restore")
+async def restore_backup(request: Request, file: UploadFile = File(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    suffix = Path(file.filename or "backup.db").suffix.lower()
+    if suffix != ".db":
+        return HTMLResponse("<h2>Restore failed: please upload a .db backup file.</h2>", status_code=400)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".db")
+    os.close(tmp_fd)
+
+    try:
+        with open(tmp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        test_conn = sqlite3.connect(tmp_path)
+        test_cursor = test_conn.cursor()
+        test_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='members'")
+        if not test_cursor.fetchone():
+            test_conn.close()
+            os.remove(tmp_path)
+            return HTMLResponse("<h2>Restore failed: uploaded file is not a valid MJ Guild Manager database.</h2>", status_code=400)
+        test_conn.close()
+
+        shutil.copyfile(tmp_path, DB_PATH)
+        os.remove(tmp_path)
+        return RedirectResponse(url="/backup", status_code=302)
+
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return HTMLResponse(f"<h2>Restore failed: {e}</h2>", status_code=500)
