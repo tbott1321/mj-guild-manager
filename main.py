@@ -56,6 +56,7 @@ def init_db():
             communication_method TEXT DEFAULT 'N/A',
             whatsapp_number TEXT DEFAULT '',
             discord_username TEXT DEFAULT '',
+            watchlist_flag INTEGER DEFAULT 0,
             created_at TEXT,
             updated_at TEXT
         )
@@ -71,7 +72,6 @@ def init_db():
         )
     """)
 
-    # Weekly guild stats import snapshots
     c.execute("""
         CREATE TABLE IF NOT EXISTS guild_stat_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,7 +95,6 @@ def init_db():
         )
     """)
 
-    # Kill reports
     c.execute("""
         CREATE TABLE IF NOT EXISTS kill_reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,7 +130,6 @@ def init_db():
         )
     """)
 
-    # Guild fest reports
     c.execute("""
         CREATE TABLE IF NOT EXISTS guild_fest_reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -173,6 +171,8 @@ def init_db():
         c.execute("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''")
     if not column_exists(conn, "members", "discord_username"):
         c.execute("ALTER TABLE members ADD COLUMN discord_username TEXT DEFAULT ''")
+    if not column_exists(conn, "members", "watchlist_flag"):
+        c.execute("ALTER TABLE members ADD COLUMN watchlist_flag INTEGER DEFAULT 0")
     if not column_exists(conn, "members", "created_at"):
         c.execute("ALTER TABLE members ADD COLUMN created_at TEXT")
     if not column_exists(conn, "members", "updated_at"):
@@ -195,6 +195,7 @@ def init_db():
     c.execute("UPDATE members SET communication_method = COALESCE(communication_method, 'N/A') WHERE communication_method IS NULL OR TRIM(communication_method) = ''")
     c.execute("UPDATE members SET whatsapp_number = COALESCE(whatsapp_number, '') WHERE whatsapp_number IS NULL")
     c.execute("UPDATE members SET discord_username = COALESCE(discord_username, '') WHERE discord_username IS NULL")
+    c.execute("UPDATE members SET watchlist_flag = COALESCE(watchlist_flag, 0) WHERE watchlist_flag IS NULL")
     c.execute("UPDATE members SET created_at = COALESCE(created_at, ?) WHERE created_at IS NULL OR TRIM(created_at) = ''", (now,))
     c.execute("UPDATE members SET updated_at = COALESCE(updated_at, ?) WHERE updated_at IS NULL OR TRIM(updated_at) = ''", (now,))
 
@@ -274,6 +275,7 @@ def build_members_query(
     troop_comp_filter: str = "",
     min_mana: str = "",
     min_sigils: str = "",
+    watchlist_only: str = "",
     sort_by: str = "might",
     sort_dir: str = "desc"
 ):
@@ -331,8 +333,45 @@ def build_members_query(
         except ValueError:
             pass
 
+    if watchlist_only == "yes":
+        sql += " AND COALESCE(m.watchlist_flag, 0) = 1"
+
     sql += f" ORDER BY {get_sort_sql(sort_by, sort_dir)}"
     return sql, params
+
+
+def get_member_fail_stats(conn, igg_id: str, member_name: str):
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT COUNT(*) AS total_count,
+               SUM(CASE WHEN overall_pass = 0 THEN 1 ELSE 0 END) AS fail_count
+        FROM kill_report_rows
+        WHERE igg_id = ?
+    """, (igg_id,))
+    kill_stats = c.fetchone()
+
+    c.execute("""
+        SELECT COUNT(*) AS total_count,
+               SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) AS fail_count
+        FROM guild_fest_report_rows
+        WHERE LOWER(player_name) = LOWER(?)
+    """, (member_name,))
+    gf_stats = c.fetchone()
+
+    kill_total = kill_stats["total_count"] or 0
+    kill_fail = kill_stats["fail_count"] or 0
+    gf_total = gf_stats["total_count"] or 0
+    gf_fail = gf_stats["fail_count"] or 0
+
+    return {
+        "kill_total": kill_total,
+        "kill_fail": kill_fail,
+        "kill_consistent_fail": kill_fail >= 2,
+        "gf_total": gf_total,
+        "gf_fail": gf_fail,
+        "gf_consistent_fail": gf_fail >= 2
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -345,7 +384,8 @@ def dashboard(
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
-    min_sigils: str = Query(default="")
+    min_sigils: str = Query(default=""),
+    watchlist_only: str = Query(default="")
 ):
     conn = get_conn()
     c = conn.cursor()
@@ -357,6 +397,7 @@ def dashboard(
         troop_comp_filter=troop_comp_filter,
         min_mana=min_mana,
         min_sigils=min_sigils,
+        watchlist_only=watchlist_only,
         sort_by=sort_by,
         sort_dir=sort_dir
     )
@@ -368,6 +409,18 @@ def dashboard(
 
     c.execute("SELECT * FROM guild_fest_reports ORDER BY generated_at DESC LIMIT 1")
     latest_guild_fest_report = c.fetchone()
+
+    watchlist_summary = []
+    if is_admin(request):
+        c.execute("SELECT igg_id, name, watchlist_flag FROM members WHERE COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)")
+        watchlisted = c.fetchall()
+        for member in watchlisted:
+            stats = get_member_fail_stats(conn, member["igg_id"], member["name"])
+            watchlist_summary.append({
+                "igg_id": member["igg_id"],
+                "name": member["name"],
+                **stats
+            })
 
     conn.close()
 
@@ -384,11 +437,33 @@ def dashboard(
             "troop_comp_filter": troop_comp_filter,
             "min_mana": min_mana,
             "min_sigils": min_sigils,
+            "watchlist_only": watchlist_only,
             "latest_kill_report": latest_kill_report,
             "latest_guild_fest_report": latest_guild_fest_report,
+            "watchlist_summary": watchlist_summary,
             "is_admin": is_admin(request)
         }
     )
+
+
+@app.post("/member/{igg_id}/watchlist")
+def toggle_watchlist(
+    request: Request,
+    igg_id: str,
+    watchlist_flag: int = Form(...)
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    conn.execute(
+        "UPDATE members SET watchlist_flag = ?, updated_at = ? WHERE igg_id = ?",
+        (1 if int(watchlist_flag) == 1 else 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id)
+    )
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url=f"/member/{igg_id}", status_code=302)
 
 
 @app.get("/member/{igg_id}", response_class=HTMLResponse)
@@ -428,6 +503,7 @@ def member_page(request: Request, igg_id: str):
     """, (member["name"],))
     guild_fest_history = c.fetchall()
 
+    fail_stats = get_member_fail_stats(conn, igg_id, member["name"])
     conn.close()
 
     return templates.TemplateResponse(
@@ -438,6 +514,7 @@ def member_page(request: Request, igg_id: str):
             "history": history,
             "kill_history": kill_history,
             "guild_fest_history": guild_fest_history,
+            "fail_stats": fail_stats,
             "is_admin": is_admin(request)
         }
     )
@@ -505,14 +582,7 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
 
     df.columns = [str(c).strip() for c in df.columns]
 
-    required_columns = [
-        "Name",
-        "User ID",
-        "Rank",
-        "Might",
-        "Kills",
-        "Enemies Destroyed Might"
-    ]
+    required_columns = ["Name", "User ID", "Rank", "Might", "Kills", "Enemies Destroyed Might"]
     missing = [col for col in required_columns if col not in df.columns]
     if missing:
         return HTMLResponse(f"""
@@ -578,27 +648,28 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
             existing_comm_method = existing["communication_method"] or "N/A"
             existing_whatsapp = existing["whatsapp_number"] or ""
             existing_discord = existing["discord_username"] or ""
+            existing_watchlist = 0 if existing["watchlist_flag"] is None else int(existing["watchlist_flag"])
 
             conn.execute("""
                 UPDATE members
                 SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
                     alt_account = ?, troop_comp = ?, communication_method = ?, whatsapp_number = ?, discord_username = ?,
-                    comments = ?, updated_at = ?
+                    watchlist_flag = ?, comments = ?, updated_at = ?
                 WHERE igg_id = ?
             """, (
                 name, rank, might, kills, edm, existing_mana, existing_sigils,
                 existing_alt_account, existing_troop_comp, existing_comm_method, existing_whatsapp, existing_discord,
-                existing_comments, now, igg_id
+                existing_watchlist, existing_comments, now, igg_id
             ))
         else:
             conn.execute("""
                 INSERT INTO members
                 (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
-                 communication_method, whatsapp_number, discord_username, comments, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 igg_id, name, rank, might, kills, edm, 0, 0, 0, "N/A",
-                "N/A", "", "", "", now, now
+                "N/A", "", "", 0, "", now, now
             ))
 
     conn.commit()
@@ -652,7 +723,6 @@ def create_kill_report(
 
     start_map = {row["igg_id"]: row for row in start_rows}
     end_map = {row["igg_id"]: row for row in end_rows}
-
     common_ids = sorted(set(start_map.keys()) & set(end_map.keys()))
 
     report_rows = []
@@ -859,7 +929,8 @@ def export_members(
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
-    min_sigils: str = Query(default="")
+    min_sigils: str = Query(default=""),
+    watchlist_only: str = Query(default="")
 ):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
@@ -872,6 +943,7 @@ def export_members(
         troop_comp_filter=troop_comp_filter,
         min_mana=min_mana,
         min_sigils=min_sigils,
+        watchlist_only=watchlist_only,
         sort_by=sort_by,
         sort_dir=sort_dir
     )
@@ -882,12 +954,14 @@ def export_members(
         "name", "igg_id", "rank", "might", "kills", "edm",
         "mana", "sigils", "alt_account", "troop_comp",
         "communication_method", "whatsapp_number", "discord_username",
-        "comments", "created_at", "updated_at", "last_name_change"
+        "watchlist_flag", "comments", "created_at", "updated_at", "last_name_change"
     ]
     df = df[[col for col in export_cols if col in df.columns]]
 
     if "alt_account" in df.columns:
         df["alt_account"] = df["alt_account"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
+    if "watchlist_flag" in df.columns:
+        df["watchlist_flag"] = df["watchlist_flag"].apply(lambda x: "Yes" if int(x or 0) == 1 else "No")
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:

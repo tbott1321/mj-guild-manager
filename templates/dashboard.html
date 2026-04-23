@@ -44,15 +44,18 @@
             padding: 20px;
         }
 
-        .stats-box {
+        .stats-box, .report-section, .search-box, .watchlist-box {
             background: white;
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 20px;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
+        }
+
+        .stats-box {
             display: flex;
             flex-wrap: wrap;
             gap: 20px;
-            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
         }
 
         .stat-card {
@@ -70,16 +73,7 @@
             font-weight: bold;
         }
 
-        /* NEW REPORT SECTION */
-        .report-section {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
-        }
-
-        .report-section h2 {
+        .report-section h2, .watchlist-box h2 {
             margin-top: 0;
             margin-bottom: 15px;
             font-size: 22px;
@@ -110,14 +104,6 @@
             margin-top: 15px;
             color: gray;
             font-size: 14px;
-        }
-
-        .search-box {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
         }
 
         .search-row {
@@ -162,6 +148,18 @@
             border-radius: 8px;
         }
 
+        .watch-item {
+            padding: 12px 14px;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: #fffdf7;
+        }
+
+        .watch-item strong {
+            color: #92400e;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -196,11 +194,16 @@
             background: #f8fafc;
         }
 
-        .rank1 { color: gold; font-weight: bold; }
-        .rank2 { color: red; font-weight: bold; }
-        .rank3 { color: blue; font-weight: bold; }
-        .rank4 { color: green; font-weight: bold; }
-        .rank5 { color: gray; font-weight: bold; }
+        .watch-pill {
+            display: inline-block;
+            margin-left: 8px;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+        }
 
         .mobile-card {
             display: none;
@@ -248,7 +251,6 @@
 
 <div class="container">
 
-    <!-- Guild Stats -->
     <div class="stats-box">
         <div class="stat-card">
             <div class="stat-title">Total Members</div>
@@ -257,23 +259,17 @@
 
         <div class="stat-card">
             <div class="stat-title">Guild Total Might</div>
-            <div class="stat-value">
-                {{ "{:,}".format(members | sum(attribute='might')) }}
-            </div>
+            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='might')) }}</div>
         </div>
 
         <div class="stat-card">
             <div class="stat-title">Guild Total Kills</div>
-            <div class="stat-value">
-                {{ "{:,}".format(members | sum(attribute='kills')) }}
-            </div>
+            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='kills')) }}</div>
         </div>
 
         <div class="stat-card">
             <div class="stat-title">Guild Total EDM</div>
-            <div class="stat-value">
-                {{ "{:,}".format(members | sum(attribute='edm')) }}
-            </div>
+            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='edm')) }}</div>
         </div>
 
         <div class="stat-card">
@@ -299,32 +295,21 @@
         </div>
     </div>
 
-    <!-- REPORT HUB -->
     <div class="report-section">
         <h2>Reports</h2>
 
         <div class="report-buttons">
-
             {% if is_admin %}
-                <a href="/reports/kills/create" class="report-btn">
-                    Create Kill Report
-                </a>
-
-                <a href="/reports/guildfest/create" class="report-btn">
-                    Create Guild Fest Report
-                </a>
+                <a href="/reports/kills/create" class="report-btn">Create Kill Report</a>
+                <a href="/reports/guildfest/create" class="report-btn">Create Guild Fest Report</a>
             {% endif %}
 
             {% if latest_kill_report %}
-                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary">
-                    View Latest Kill Report
-                </a>
+                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary">View Latest Kill Report</a>
             {% endif %}
 
             {% if latest_guild_fest_report %}
-                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary">
-                    View Latest Guild Fest Report
-                </a>
+                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary">View Latest Guild Fest Report</a>
             {% endif %}
         </div>
 
@@ -335,7 +320,6 @@
                 ({{ latest_kill_report.generated_at }})
                 <br>
             {% endif %}
-
             {% if latest_guild_fest_report %}
                 Latest Guild Fest Report:
                 <strong>{{ latest_guild_fest_report.report_name }}</strong>
@@ -344,10 +328,30 @@
         </div>
     </div>
 
-    <!-- Search -->
+    {% if is_admin %}
+    <div class="watchlist-box">
+        <h2>Admin Monitoring</h2>
+        {% if watchlist_summary|length == 0 %}
+            <div style="color: gray;">No players are currently on the watchlist.</div>
+        {% else %}
+            {% for item in watchlist_summary %}
+                <div class="watch-item">
+                    <strong>{{ item.name }}</strong><br>
+                    Kill report fails: {{ item.kill_fail }} / {{ item.kill_total }}
+                    {% if item.kill_consistent_fail %} — consistently failing{% endif %}
+                    <br>
+                    Guild Fest fails: {{ item.gf_fail }} / {{ item.gf_total }}
+                    {% if item.gf_consistent_fail %} — consistently failing{% endif %}
+                    <br>
+                    <a href="/member/{{ item.igg_id }}" style="color:#312e81; font-weight:bold; text-decoration:none;">Open profile</a>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="search-box">
         <form method="GET">
-
             <div class="search-row">
                 <input
                     type="text"
@@ -355,62 +359,49 @@
                     value="{{ search }}"
                     placeholder="Search by name, rank, might, kills, or EDM"
                 >
-
-                <button class="search-btn" type="submit">
-                    Search
-                </button>
+                <button class="search-btn" type="submit">Search</button>
             </div>
 
             <div class="filter-row">
                 <select name="rank_filter">
                     <option value="">All Ranks</option>
-                    <option value="RANK1">RANK1</option>
-                    <option value="RANK2">RANK2</option>
-                    <option value="RANK3">RANK3</option>
-                    <option value="RANK4">RANK4</option>
-                    <option value="RANK5">RANK5</option>
+                    <option value="RANK1" {% if rank_filter == "RANK1" %}selected{% endif %}>RANK1</option>
+                    <option value="RANK2" {% if rank_filter == "RANK2" %}selected{% endif %}>RANK2</option>
+                    <option value="RANK3" {% if rank_filter == "RANK3" %}selected{% endif %}>RANK3</option>
+                    <option value="RANK4" {% if rank_filter == "RANK4" %}selected{% endif %}>RANK4</option>
+                    <option value="RANK5" {% if rank_filter == "RANK5" %}selected{% endif %}>RANK5</option>
                 </select>
 
                 <select name="alt_filter">
                     <option value="">All Accounts</option>
-                    <option value="yes">Alt Accounts</option>
-                    <option value="no">Main Accounts</option>
+                    <option value="yes" {% if alt_filter == "yes" %}selected{% endif %}>Alt Accounts</option>
+                    <option value="no" {% if alt_filter == "no" %}selected{% endif %}>Main Accounts</option>
                 </select>
 
                 <select name="troop_comp_filter">
                     <option value="">All Troop Comps</option>
-                    <option value="Overweight">Overweight</option>
-                    <option value="Pass">Pass</option>
-                    <option value="Low">Low</option>
-                    <option value="N/A">N/A</option>
+                    <option value="Overweight" {% if troop_comp_filter == "Overweight" %}selected{% endif %}>Overweight</option>
+                    <option value="Pass" {% if troop_comp_filter == "Pass" %}selected{% endif %}>Pass</option>
+                    <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
+                    <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
                 </select>
 
-                <input
-                    type="number"
-                    name="min_mana"
-                    value="{{ min_mana }}"
-                    placeholder="Min Mana"
-                >
+                <input type="number" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
+                <input type="number" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
 
-                <input
-                    type="number"
-                    name="min_sigils"
-                    value="{{ min_sigils }}"
-                    placeholder="Min Sigils"
-                >
+                {% if is_admin %}
+                <select name="watchlist_only">
+                    <option value="">All Players</option>
+                    <option value="yes" {% if watchlist_only == "yes" %}selected{% endif %}>Watchlist Only</option>
+                </select>
+                {% endif %}
 
-                <button class="search-btn" type="submit">
-                    Apply Filters
-                </button>
-
-                <a href="/" class="reset-btn">
-                    Reset
-                </a>
+                <button class="search-btn" type="submit">Apply Filters</button>
+                <a href="/" class="reset-btn">Reset</a>
             </div>
         </form>
     </div>
 
-    <!-- Desktop Table -->
     <table>
         <thead>
             <tr>
@@ -423,18 +414,16 @@
                 <th>Sigils</th>
             </tr>
         </thead>
-
         <tbody>
             {% for member in members %}
-            <tr class="clickable-row"
-                onclick="window.location='/member/{{ member.igg_id }}'">
-
-                <td>{{ member.name }}</td>
-
+            <tr class="clickable-row" onclick="window.location='/member/{{ member.igg_id }}'">
                 <td>
-                    {{ member.rank }}
+                    {{ member.name }}
+                    {% if is_admin and member.watchlist_flag %}
+                        <span class="watch-pill">Watchlist</span>
+                    {% endif %}
                 </td>
-
+                <td>{{ member.rank }}</td>
                 <td>{{ "{:,}".format(member.might or 0) }}</td>
                 <td>{{ "{:,}".format(member.kills or 0) }}</td>
                 <td>{{ "{:,}".format(member.edm or 0) }}</td>
@@ -445,13 +434,15 @@
         </tbody>
     </table>
 
-    <!-- Mobile -->
     <div class="mobile-card">
         {% for member in members %}
-        <div class="player-card"
-             onclick="window.location='/member/{{ member.igg_id }}'">
-
-            <h3>{{ member.name }}</h3>
+        <div class="player-card" onclick="window.location='/member/{{ member.igg_id }}'">
+            <h3>
+                {{ member.name }}
+                {% if is_admin and member.watchlist_flag %}
+                    <span class="watch-pill">Watchlist</span>
+                {% endif %}
+            </h3>
             <p><strong>{{ member.rank }}</strong></p>
             <p>Might: {{ "{:,}".format(member.might or 0) }}</p>
             <p>Kills: {{ "{:,}".format(member.kills or 0) }}</p>
