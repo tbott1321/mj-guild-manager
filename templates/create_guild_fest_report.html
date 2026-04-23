@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Guild Fest Report</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .topbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .back {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 24px auto;
+            padding: 0 20px 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .card h2 {
+            margin: 0 0 10px;
+            font-size: 24px;
+        }
+
+        .muted {
+            color: #6b7280;
+            line-height: 1.6;
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+            background: white;
+            margin-bottom: 16px;
+        }
+
+        .actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .button, .link-button {
+            display: inline-block;
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: white;
+        }
+
+        .link-button {
+            background: #eef2ff;
+            color: #4338ca;
+        }
+
+        .note {
+            margin-top: 18px;
+            padding: 16px;
+            border-radius: 16px;
+            background: #f8fafc;
+            color: #475569;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 760px) {
+            .topbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .actions .button,
+            .actions .link-button {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Create Guild Fest Report</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Generate Guild Fest Report</h2>
+            <div class="muted">
+                Upload the Guild Fest spreadsheet and set the pass score. The report will be saved and visible to members.
+            </div>
+
+            <form action="/reports/guildfest/create" method="post" enctype="multipart/form-data">
+                <label for="report_name">Report Name</label>
+                <input id="report_name" name="report_name" placeholder="Example: Guild Fest - May 2026" required>
+
+                <label for="pass_score">Pass Score</label>
+                <input id="pass_score" name="pass_score" type="number" min="0" required>
+
+                <label for="file">Guild Fest Spreadsheet</label>
+                <input id="file" name="file" type="file" accept=".xlsx,.xls,.csv" required>
+
+                <div class="actions">
+                    <button class="button" type="submit">Generate Guild Fest Report</button>
+                    <a class="link-button" href="/">Cancel</a>
+                </div>
+            </form>
+
+            <div class="note">
+                Expected columns: Name, Completed, Total, Score, Completed Bonus.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

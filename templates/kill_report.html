@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report.report_name }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .topbar-inner {
+            max-width: 1280px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .back {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 24px auto;
+            padding: 0 20px 24px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 18px;
+            padding: 20px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .label {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .section {
+            background: white;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .section h2 {
+            margin: 0 0 8px;
+            font-size: 22px;
+        }
+
+        .muted {
+            color: #6b7280;
+            margin-bottom: 16px;
+        }
+
+        .targets {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .pass {
+            background: #dcfce7;
+            color: #166534;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .fail {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .na {
+            background: #e5e7eb;
+            color: #374151;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1100px;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #111827;
+            color: white;
+            text-align: left;
+            padding: 14px;
+            font-size: 14px;
+        }
+
+        td {
+            padding: 14px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+
+        tr:hover td {
+            background: #f9fafb;
+        }
+
+        @media (max-width: 1100px) {
+            .info-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 700px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">{{ report.report_name }}</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="info-grid">
+            <div class="card">
+                <div class="label">Generated</div>
+                <div class="value" style="font-size:18px;">{{ report.generated_at }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Average Kill Increase</div>
+                <div class="value">{{ "{:,.0f}".format(report.avg_kill_increase or 0) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Average EDM Increase</div>
+                <div class="value">{{ "{:,.0f}".format(report.avg_edm_increase or 0) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Average EDM Per Kill</div>
+                <div class="value">{{ "{:,.0f}".format(report.avg_edm_per_kill or 0) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Kill Target</div>
+                <div class="value" style="font-size:18px;">
+                    {% if report.target_kill_increase is not none %}
+                        {{ "{:,}".format(report.target_kill_increase) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card">
+                <div class="label">EDM / K Target</div>
+                <div class="value" style="font-size:18px;">
+                    {% if report.target_edm_per_kill is not none %}
+                        {{ "{:,}".format(report.target_edm_per_kill) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Kill Report Results</h2>
+            <div class="muted">
+                Only players present in both the start and end snapshots are included in this report.
+            </div>
+
+            <div class="targets">
+                <span class="pill">
+                    EDM Target:
+                    {% if report.target_edm_increase is not none %}
+                        {{ "{:,}".format(report.target_edm_increase) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </span>
+                <span class="pill">
+                    Kill Target:
+                    {% if report.target_kill_increase is not none %}
+                        {{ "{:,}".format(report.target_kill_increase) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </span>
+                <span class="pill">
+                    EDM/Kill Target:
+                    {% if report.target_edm_per_kill is not none %}
+                        {{ "{:,}".format(report.target_edm_per_kill) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </span>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Kill Increase</th>
+                            <th>EDM Increase</th>
+                            <th>EDM / Kill</th>
+                            <th>Kill Result</th>
+                            <th>EDM Result</th>
+                            <th>EDM / Kill Result</th>
+                            <th>Overall</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{{ row.player_name }}</td>
+                            <td>{{ "{:,}".format(row.kill_increase or 0) }}</td>
+                            <td>{{ "{:,}".format(row.edm_increase or 0) }}</td>
+                            <td>{{ "{:,}".format(row.edm_per_kill or 0) }}</td>
+
+                            <td>
+                                {% if row.pass_kills is none %}
+                                    <span class="na">N/A</span>
+                                {% elif row.pass_kills == 1 %}
+                                    <span class="pass">PASS</span>
+                                {% else %}
+                                    <span class="fail">FAIL</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if row.pass_edm is none %}
+                                    <span class="na">N/A</span>
+                                {% elif row.pass_edm == 1 %}
+                                    <span class="pass">PASS</span>
+                                {% else %}
+                                    <span class="fail">FAIL</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if row.pass_edm_per_kill is none %}
+                                    <span class="na">N/A</span>
+                                {% elif row.pass_edm_per_kill == 1 %}
+                                    <span class="pass">PASS</span>
+                                {% else %}
+                                    <span class="fail">FAIL</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if row.overall_pass is none %}
+                                    <span class="na">N/A</span>
+                                {% elif row.overall_pass == 1 %}
+                                    <span class="pass">PASS</span>
+                                {% else %}
+                                    <span class="fail">FAIL</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

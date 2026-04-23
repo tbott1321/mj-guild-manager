@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Kill Report</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .topbar-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .back {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 24px auto;
+            padding: 0 20px 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            margin-bottom: 24px;
+        }
+
+        .card h2 {
+            margin: 0 0 10px;
+            font-size: 24px;
+        }
+
+        .muted {
+            color: #6b7280;
+            line-height: 1.6;
+            margin-bottom: 18px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+            background: white;
+        }
+
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .button, .link-button {
+            display: inline-block;
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: white;
+        }
+
+        .link-button {
+            background: #eef2ff;
+            color: #4338ca;
+        }
+
+        .hint-box {
+            margin-top: 18px;
+            padding: 16px;
+            border-radius: 16px;
+            background: #f8fafc;
+            color: #475569;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 760px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+
+            .actions .button,
+            .actions .link-button {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Create Kill Report</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Generate 3-Week Kill Report</h2>
+            <div class="muted">
+                Select the start and end guild stat snapshots, then optionally enter pass targets.
+                Players must exist in both snapshots to be included in the report.
+            </div>
+
+            <form action="/reports/kills/create" method="post">
+                <div class="grid">
+                    <div class="full">
+                        <label for="report_name">Report Name</label>
+                        <input id="report_name" name="report_name" placeholder="Example: Kill Report - May 2026" required>
+                    </div>
+
+                    <div>
+                        <label for="start_snapshot_id">Start Snapshot</label>
+                        <select id="start_snapshot_id" name="start_snapshot_id" required>
+                            <option value="">Select start snapshot</option>
+                            {% for snap in snapshots %}
+                                <option value="{{ snap.id }}">{{ snap.snapshot_name }} — {{ snap.imported_at }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="end_snapshot_id">End Snapshot</label>
+                        <select id="end_snapshot_id" name="end_snapshot_id" required>
+                            <option value="">Select end snapshot</option>
+                            {% for snap in snapshots %}
+                                <option value="{{ snap.id }}">{{ snap.snapshot_name }} — {{ snap.imported_at }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="target_kill_increase">Target Kill Increase</label>
+                        <input id="target_kill_increase" name="target_kill_increase" type="number" min="0" placeholder="Optional">
+                    </div>
+
+                    <div>
+                        <label for="target_edm_increase">Target EDM Increase</label>
+                        <input id="target_edm_increase" name="target_edm_increase" type="number" min="0" placeholder="Optional">
+                    </div>
+
+                    <div class="full">
+                        <label for="target_edm_per_kill">Target EDM Per Kill</label>
+                        <input id="target_edm_per_kill" name="target_edm_per_kill" type="number" min="0" placeholder="Optional">
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="button" type="submit">Generate Kill Report</button>
+                    <a class="link-button" href="/">Cancel</a>
+                </div>
+            </form>
+
+            <div class="hint-box">
+                If a target is left blank, that section will show data only and no pass/fail result.
+                EDM per kill is calculated as EDM increase divided by kill increase and rounded to a whole number.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
