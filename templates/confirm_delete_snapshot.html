@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delete Report</title>
+    <title>Delete Snapshot</title>
     <style>
         * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
         body { margin: 0; background: #f3f4f6; color: #111827; }
@@ -22,24 +22,28 @@
 <body>
     <div class="topbar">
         <div class="topbar-inner">
-            <div class="title">Delete Report</div>
+            <div class="title">Delete Snapshot</div>
             <a class="back" href="/reports/archive">Cancel</a>
         </div>
     </div>
 
     <div class="container">
         <div class="card">
-            <div class="warning">This will permanently delete this report and its rows.</div>
-
-            <div class="meta">
-                <strong>Report:</strong> {{ report.report_name }}<br>
-                <strong>Generated:</strong> {{ report.generated_at }}
+            <div class="warning">
+                This will permanently delete this snapshot and its stored rows.
+                Any kill reports using this snapshot may no longer make sense.
             </div>
 
-            <form action="/reports/delete/{{ report_type }}/{{ report.id }}" method="post">
-                <label>Type the report name exactly to confirm:</label>
+            <div class="meta">
+                <strong>Snapshot:</strong> {{ snapshot.snapshot_name }}<br>
+                <strong>Created:</strong> {{ snapshot.imported_at }}<br>
+                <strong>Source:</strong> {{ snapshot.source_filename }}
+            </div>
+
+            <form action="/snapshots/delete/{{ snapshot.id }}" method="post">
+                <label>Type the snapshot name exactly to confirm:</label>
                 <input name="confirm_text" required>
-                <button type="submit">Delete Report</button>
+                <button type="submit">Delete Snapshot</button>
             </form>
         </div>
     </div>

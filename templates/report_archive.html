@@ -1,83 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Report Archive</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar { background: linear-gradient(135deg, #111827, #1f2937, #312e81); color: white; padding: 22px 28px; }
+        .topbar-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .title { font-size: 28px; font-weight: 700; }
+        .back { text-decoration: none; color: white; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15); padding: 10px 16px; border-radius: 12px; font-weight: 600; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 20px 24px; }
+        .section { background: white; border-radius: 18px; padding: 22px; box-shadow: 0 10px 24px rgba(15,23,42,.06); margin-bottom: 24px; }
+        h2 { margin-top: 0; color: #1f2937; }
+        table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; }
+        th { background: #111827; color: white; text-align: left; padding: 14px; }
+        td { padding: 14px; border-bottom: 1px solid #e5e7eb; }
+        .empty { color: #6b7280; background: #f9fafb; padding: 16px; border-radius: 12px; }
+        .link { color: #4338ca; font-weight: 700; text-decoration: none; }
+        .delete-link { color: #dc2626; font-weight: 700; text-decoration: none; }
+        .top-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        @media (max-width: 760px) {
+            .topbar-inner { flex-direction: column; align-items: flex-start; }
+            table { font-size: 13px; }
+            th, td { padding: 10px; }
+        }
+    </style>
 </head>
 <body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Report Archive</div>
+            <div class="top-actions">
+                {% if is_admin %}
+                    <a class="back" href="/snapshots/create">Create Manual Snapshot</a>
+                {% endif %}
+                <a class="back" href="/">Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
 
-<h1>Report Archive</h1>
-<a href="/">Back to Dashboard</a>
+    <div class="container">
 
-<h2>Kill Reports</h2>
+        <div class="section">
+            <h2>Kill Reports</h2>
+            {% if kill_reports|length == 0 %}
+                <div class="empty">No kill reports found.</div>
+            {% else %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Generated</th>
+                            <th>Open</th>
+                            {% if is_admin %}<th>Delete</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in kill_reports %}
+                        <tr>
+                            <td>{{ report.report_name }}</td>
+                            <td>{{ report.generated_at }}</td>
+                            <td><a class="link" href="/reports/kills/{{ report.id }}">Open</a></td>
+                            {% if is_admin %}
+                                <td><a class="delete-link" href="/reports/delete/kills/{{ report.id }}">Delete</a></td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
 
-{% if kill_reports %}
-<table border="1">
-    <tr>
-        <th>Name</th>
-        <th>Date</th>
-        <th>View</th>
-        {% if is_admin %}
-        <th>Delete</th>
-        {% endif %}
-    </tr>
+        <div class="section">
+            <h2>Guild Fest Reports</h2>
+            {% if guild_fest_reports|length == 0 %}
+                <div class="empty">No guild fest reports found.</div>
+            {% else %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Generated</th>
+                            <th>Open</th>
+                            {% if is_admin %}<th>Delete</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in guild_fest_reports %}
+                        <tr>
+                            <td>{{ report.report_name }}</td>
+                            <td>{{ report.generated_at }}</td>
+                            <td><a class="link" href="/reports/guildfest/{{ report.id }}">Open</a></td>
+                            {% if is_admin %}
+                                <td><a class="delete-link" href="/reports/delete/guildfest/{{ report.id }}">Delete</a></td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
 
-    {% for report in kill_reports %}
-    <tr>
-        <td>{{ report.report_name }}</td>
-        <td>{{ report.generated_at }}</td>
-        <td>
-            <a href="/reports/kills/{{ report.id }}">View</a>
-        </td>
+        <div class="section">
+            <h2>Snapshots</h2>
+            {% if snapshots|length == 0 %}
+                <div class="empty">No snapshots found.</div>
+            {% else %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Created</th>
+                            <th>Source</th>
+                            {% if is_admin %}<th>Delete</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for snapshot in snapshots %}
+                        <tr>
+                            <td>{{ snapshot.snapshot_name }}</td>
+                            <td>{{ snapshot.imported_at }}</td>
+                            <td>{{ snapshot.source_filename }}</td>
+                            {% if is_admin %}
+                                <td><a class="delete-link" href="/snapshots/delete/{{ snapshot.id }}">Delete</a></td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
 
-        {% if is_admin %}
-        <td>
-            <a href="/reports/delete/kills/{{ report.id }}">
-                Delete
-            </a>
-        </td>
-        {% endif %}
-    </tr>
-    {% endfor %}
-</table>
-{% else %}
-<p>No kill reports found.</p>
-{% endif %}
-
-
-<h2>Guild Fest Reports</h2>
-
-{% if guild_fest_reports %}
-<table border="1">
-    <tr>
-        <th>Name</th>
-        <th>Date</th>
-        <th>View</th>
-        {% if is_admin %}
-        <th>Delete</th>
-        {% endif %}
-    </tr>
-
-    {% for report in guild_fest_reports %}
-    <tr>
-        <td>{{ report.report_name }}</td>
-        <td>{{ report.generated_at }}</td>
-        <td>
-            <a href="/reports/guildfest/{{ report.id }}">View</a>
-        </td>
-
-        {% if is_admin %}
-        <td>
-            <a href="/reports/delete/guildfest/{{ report.id }}">
-                Delete
-            </a>
-        </td>
-        {% endif %}
-    </tr>
-    {% endfor %}
-</table>
-{% else %}
-<p>No guild fest reports found.</p>
-{% endif %}
-
+    </div>
 </body>
 </html>

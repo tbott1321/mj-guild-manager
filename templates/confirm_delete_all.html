@@ -1,34 +1,44 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delete All Players</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar { background: linear-gradient(135deg, #111827, #1f2937, #312e81); color: white; padding: 22px 28px; }
+        .topbar-inner { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .title { font-size: 28px; font-weight: 700; }
+        .back { text-decoration: none; color: white; background: rgba(255,255,255,.12); padding: 10px 16px; border-radius: 12px; font-weight: 600; }
+        .container { max-width: 900px; margin: 24px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 18px; padding: 24px; box-shadow: 0 10px 24px rgba(15,23,42,.06); }
+        .warning { background: #fff7ed; color: #9a3412; padding: 16px; border-radius: 14px; line-height: 1.7; margin-bottom: 18px; }
+        input { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #d1d5db; margin-bottom: 16px; }
+        button { background: #dc2626; color: white; border: none; padding: 12px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+    </style>
 </head>
 <body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Delete All Players</div>
+            <a class="back" href="/">Cancel</a>
+        </div>
+    </div>
 
-<h1>Delete All Players</h1>
+    <div class="container">
+        <div class="card">
+            <div class="warning">
+                This permanently deletes all roster members, pending members, and name history.
+                Reports and snapshots will remain.
+            </div>
 
-<p>
-This will permanently delete:
-</p>
-
-<ul>
-    <li>All roster members</li>
-    <li>All pending members</li>
-    <li>All name history</li>
-</ul>
-
-<p>
-Reports will remain untouched.
-</p>
-
-<form action="/admin/delete-all" method="post">
-    <button type="submit">
-        Confirm Delete All Players
-    </button>
-</form>
-
-<br>
-<a href="/">Cancel</a>
-
+            <form action="/admin/delete-all" method="post">
+                <label>Type <strong>DELETE ALL PLAYERS</strong> to confirm:</label>
+                <input name="confirm_text" required>
+                <button type="submit">Delete All Players</button>
+            </form>
+        </div>
+    </div>
 </body>
 </html>
