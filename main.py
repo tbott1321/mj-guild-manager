@@ -5,13 +5,16 @@ from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
 import sqlite3
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
 import shutil
 import tempfile
+import asyncio
+from io import BytesIO
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="super-secret-key-change-this")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "super-secret-key-change-this"))
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -21,6 +24,18 @@ if RENDER_DISK_PATH:
     DB_PATH = os.path.join(RENDER_DISK_PATH, "database.db")
 else:
     DB_PATH = str(BASE_DIR / "database.db")
+
+TABLES = [
+    "members",
+    "pending_members",
+    "name_history",
+    "guild_stat_snapshots",
+    "guild_stat_snapshot_rows",
+    "kill_reports",
+    "kill_report_rows",
+    "guild_fest_reports",
+    "guild_fest_report_rows",
+]
 
 
 def get_conn():
@@ -32,8 +47,7 @@ def get_conn():
 def column_exists(conn, table_name, column_name):
     c = conn.cursor()
     c.execute(f"PRAGMA table_info({table_name})")
-    cols = [row[1] for row in c.fetchall()]
-    return column_name in cols
+    return column_name in [row[1] for row in c.fetchall()]
 
 
 def init_db():
@@ -105,8 +119,7 @@ def init_db():
             rank TEXT,
             might INTEGER,
             kills INTEGER,
-            edm INTEGER,
-            FOREIGN KEY(snapshot_id) REFERENCES guild_stat_snapshots(id)
+            edm INTEGER
         )
     """)
 
@@ -122,9 +135,7 @@ def init_db():
             target_edm_per_kill INTEGER,
             avg_kill_increase REAL,
             avg_edm_increase REAL,
-            avg_edm_per_kill REAL,
-            FOREIGN KEY(start_snapshot_id) REFERENCES guild_stat_snapshots(id),
-            FOREIGN KEY(end_snapshot_id) REFERENCES guild_stat_snapshots(id)
+            avg_edm_per_kill REAL
         )
     """)
 
@@ -140,8 +151,7 @@ def init_db():
             pass_kills INTEGER,
             pass_edm INTEGER,
             pass_edm_per_kill INTEGER,
-            overall_pass INTEGER,
-            FOREIGN KEY(report_id) REFERENCES kill_reports(id)
+            overall_pass INTEGER
         )
     """)
 
@@ -165,55 +175,44 @@ def init_db():
             completed INTEGER,
             total INTEGER,
             completed_bonus TEXT,
-            passed INTEGER,
-            FOREIGN KEY(report_id) REFERENCES guild_fest_reports(id)
+            passed INTEGER
         )
     """)
 
-    if not column_exists(conn, "members", "mana"):
-        c.execute("ALTER TABLE members ADD COLUMN mana INTEGER DEFAULT 0")
-    if not column_exists(conn, "members", "sigils"):
-        c.execute("ALTER TABLE members ADD COLUMN sigils INTEGER DEFAULT 0")
-    if not column_exists(conn, "members", "comments"):
-        c.execute("ALTER TABLE members ADD COLUMN comments TEXT")
-    if not column_exists(conn, "members", "alt_account"):
-        c.execute("ALTER TABLE members ADD COLUMN alt_account INTEGER DEFAULT 0")
-    if not column_exists(conn, "members", "troop_comp"):
-        c.execute("ALTER TABLE members ADD COLUMN troop_comp TEXT DEFAULT 'N/A'")
-    if not column_exists(conn, "members", "communication_method"):
-        c.execute("ALTER TABLE members ADD COLUMN communication_method TEXT DEFAULT 'N/A'")
-    if not column_exists(conn, "members", "whatsapp_number"):
-        c.execute("ALTER TABLE members ADD COLUMN whatsapp_number TEXT DEFAULT ''")
-    if not column_exists(conn, "members", "discord_username"):
-        c.execute("ALTER TABLE members ADD COLUMN discord_username TEXT DEFAULT ''")
-    if not column_exists(conn, "members", "watchlist_flag"):
-        c.execute("ALTER TABLE members ADD COLUMN watchlist_flag INTEGER DEFAULT 0")
-    if not column_exists(conn, "members", "created_at"):
-        c.execute("ALTER TABLE members ADD COLUMN created_at TEXT")
-    if not column_exists(conn, "members", "updated_at"):
-        c.execute("ALTER TABLE members ADD COLUMN updated_at TEXT")
+    for col, definition in {
+        "mana": "INTEGER DEFAULT 0",
+        "sigils": "INTEGER DEFAULT 0",
+        "comments": "TEXT",
+        "alt_account": "INTEGER DEFAULT 0",
+        "troop_comp": "TEXT DEFAULT 'N/A'",
+        "communication_method": "TEXT DEFAULT 'N/A'",
+        "whatsapp_number": "TEXT DEFAULT ''",
+        "discord_username": "TEXT DEFAULT ''",
+        "watchlist_flag": "INTEGER DEFAULT 0",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    }.items():
+        if not column_exists(conn, "members", col):
+            c.execute(f"ALTER TABLE members ADD COLUMN {col} {definition}")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank IS NULL OR TRIM(rank) = ''")
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank = 'R1'")
     c.execute("UPDATE members SET rank = 'RANK2' WHERE rank = 'R2'")
     c.execute("UPDATE members SET rank = 'RANK3' WHERE rank = 'R3'")
     c.execute("UPDATE members SET rank = 'RANK4' WHERE rank = 'R4'")
     c.execute("UPDATE members SET rank = 'RANK5' WHERE rank = 'R5'")
-
-    c.execute("UPDATE members SET mana = COALESCE(mana, 0) WHERE mana IS NULL")
-    c.execute("UPDATE members SET sigils = COALESCE(sigils, 0) WHERE sigils IS NULL")
-    c.execute("UPDATE members SET comments = COALESCE(comments, '') WHERE comments IS NULL")
-    c.execute("UPDATE members SET alt_account = COALESCE(alt_account, 0) WHERE alt_account IS NULL")
+    c.execute("UPDATE members SET mana = COALESCE(mana, 0)")
+    c.execute("UPDATE members SET sigils = COALESCE(sigils, 0)")
+    c.execute("UPDATE members SET comments = COALESCE(comments, '')")
+    c.execute("UPDATE members SET alt_account = COALESCE(alt_account, 0)")
     c.execute("UPDATE members SET troop_comp = COALESCE(troop_comp, 'N/A') WHERE troop_comp IS NULL OR TRIM(troop_comp) = ''")
     c.execute("UPDATE members SET communication_method = COALESCE(communication_method, 'N/A') WHERE communication_method IS NULL OR TRIM(communication_method) = ''")
-    c.execute("UPDATE members SET whatsapp_number = COALESCE(whatsapp_number, '') WHERE whatsapp_number IS NULL")
-    c.execute("UPDATE members SET discord_username = COALESCE(discord_username, '') WHERE discord_username IS NULL")
-    c.execute("UPDATE members SET watchlist_flag = COALESCE(watchlist_flag, 0) WHERE watchlist_flag IS NULL")
+    c.execute("UPDATE members SET whatsapp_number = COALESCE(whatsapp_number, '')")
+    c.execute("UPDATE members SET discord_username = COALESCE(discord_username, '')")
+    c.execute("UPDATE members SET watchlist_flag = COALESCE(watchlist_flag, 0)")
     c.execute("UPDATE members SET created_at = COALESCE(created_at, ?) WHERE created_at IS NULL OR TRIM(created_at) = ''", (now,))
     c.execute("UPDATE members SET updated_at = COALESCE(updated_at, ?) WHERE updated_at IS NULL OR TRIM(updated_at) = ''", (now,))
-
     conn.commit()
     conn.close()
 
@@ -225,15 +224,7 @@ def is_admin(request: Request):
     return request.session.get("is_admin", False)
 
 
-def log_name_change(conn, igg_id, old, new):
-    if old and new and old != new:
-        conn.execute("""
-            INSERT INTO name_history (igg_id, old_name, new_name, changed_at)
-            VALUES (?, ?, ?, ?)
-        """, (igg_id, old, new, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-
-
-def normalise_comm_fields(method: str, whatsapp_number: str, discord_username: str):
+def normalise_comm_fields(method, whatsapp_number, discord_username):
     method = (method or "N/A").strip()
     whatsapp_number = (whatsapp_number or "").strip()
     discord_username = (discord_username or "").strip()
@@ -252,7 +243,84 @@ def normalise_comm_fields(method: str, whatsapp_number: str, discord_username: s
     return method, whatsapp_number, discord_username
 
 
-def get_sort_sql(sort_by: str, sort_dir: str):
+def log_name_change(conn, igg_id, old, new):
+    if old and new and old != new:
+        conn.execute("""
+            INSERT INTO name_history (igg_id, old_name, new_name, changed_at)
+            VALUES (?, ?, ?, ?)
+        """, (igg_id, old, new, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+
+
+def create_current_roster_snapshot(snapshot_name=None, source_filename="Auto roster snapshot"):
+    conn = get_conn()
+    c = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if snapshot_name is None:
+        snapshot_name = f"Manual Roster Snapshot {now}"
+
+    c.execute("SELECT id FROM guild_stat_snapshots WHERE snapshot_name = ?", (snapshot_name,))
+    existing = c.fetchone()
+    if existing:
+        conn.close()
+        return existing["id"]
+
+    c.execute("""
+        INSERT INTO guild_stat_snapshots (snapshot_name, imported_at, source_filename)
+        VALUES (?, ?, ?)
+    """, (snapshot_name, now, source_filename))
+    snapshot_id = c.lastrowid
+
+    c.execute("SELECT * FROM members ORDER BY LOWER(name)")
+    members = c.fetchall()
+
+    for member in members:
+        c.execute("""
+            INSERT INTO guild_stat_snapshot_rows
+            (snapshot_id, igg_id, player_name, rank, might, kills, edm)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            snapshot_id,
+            member["igg_id"],
+            member["name"],
+            member["rank"],
+            member["might"] or 0,
+            member["kills"] or 0,
+            member["edm"] or 0,
+        ))
+
+    conn.commit()
+    conn.close()
+    return snapshot_id
+
+
+async def weekly_auto_snapshot_loop():
+    tz = ZoneInfo("Europe/London")
+    while True:
+        now = datetime.now(tz)
+        days_until_sunday = (6 - now.weekday()) % 7
+        target = (now + timedelta(days=days_until_sunday)).replace(hour=23, minute=0, second=0, microsecond=0)
+
+        if target <= now:
+            target += timedelta(days=7)
+
+        await asyncio.sleep((target - now).total_seconds())
+
+        run_date = datetime.now(tz).strftime("%Y-%m-%d")
+        create_current_roster_snapshot(
+            snapshot_name=f"Weekly Auto Snapshot {run_date}",
+            source_filename="Automatic Sunday 23:00 roster snapshot"
+        )
+
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def start_auto_snapshot_task():
+    asyncio.create_task(weekly_auto_snapshot_loop())
+
+
+def get_sort_sql(sort_by, sort_dir):
     rank_sort = """
         CASE UPPER(COALESCE(rank, 'RANK1'))
             WHEN 'RANK1' THEN 1
@@ -263,7 +331,6 @@ def get_sort_sql(sort_by: str, sort_dir: str):
             ELSE 0
         END
     """
-
     sort_map = {
         "name": "LOWER(COALESCE(name, ''))",
         "might": "COALESCE(might, 0)",
@@ -271,36 +338,15 @@ def get_sort_sql(sort_by: str, sort_dir: str):
         "rank": rank_sort,
         "edm": "COALESCE(edm, 0)"
     }
-
     sort_column = sort_map.get(sort_by, "COALESCE(might, 0)")
     direction = "ASC" if sort_dir == "asc" else "DESC"
-
-    if sort_by == "name":
-        return f"{sort_column} {direction}, COALESCE(might, 0) DESC"
-    if sort_by == "rank":
-        return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
     return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
-def build_members_query(
-    search: str = "",
-    rank_filter: str = "",
-    alt_filter: str = "",
-    troop_comp_filter: str = "",
-    min_mana: str = "",
-    min_sigils: str = "",
-    watchlist_only: str = "",
-    sort_by: str = "might",
-    sort_dir: str = "desc"
-):
+def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc"):
     sql = """
-        SELECT
-            m.*,
-            (
-                SELECT MAX(changed_at)
-                FROM name_history nh
-                WHERE nh.igg_id = m.igg_id
-            ) AS last_name_change
+        SELECT m.*,
+        (SELECT MAX(changed_at) FROM name_history nh WHERE nh.igg_id = m.igg_id) AS last_name_change
         FROM members m
         WHERE 1=1
     """
@@ -354,12 +400,12 @@ def build_members_query(
     return sql, params
 
 
-def get_member_fail_stats(conn, igg_id: str, member_name: str):
+def get_member_fail_stats(conn, igg_id, member_name):
     c = conn.cursor()
 
     c.execute("""
         SELECT COUNT(*) AS total_count,
-               SUM(CASE WHEN overall_pass = 0 THEN 1 ELSE 0 END) AS fail_count
+        SUM(CASE WHEN overall_pass = 0 THEN 1 ELSE 0 END) AS fail_count
         FROM kill_report_rows
         WHERE igg_id = ?
     """, (igg_id,))
@@ -367,7 +413,7 @@ def get_member_fail_stats(conn, igg_id: str, member_name: str):
 
     c.execute("""
         SELECT COUNT(*) AS total_count,
-               SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) AS fail_count
+        SUM(CASE WHEN passed = 0 THEN 1 ELSE 0 END) AS fail_count
         FROM guild_fest_report_rows
         WHERE LOWER(player_name) = LOWER(?)
     """, (member_name,))
@@ -404,28 +450,20 @@ def get_watchlist_recommendations(conn):
                 "name": member["name"],
                 **stats
             })
+
     return recommendations
 
 
 def get_dashboard_insights(conn):
     c = conn.cursor()
 
-    c.execute("""
-        SELECT COUNT(*) AS cnt
-        FROM members
-        WHERE COALESCE(watchlist_flag, 0) = 1
-    """)
+    c.execute("SELECT COUNT(*) AS cnt FROM members WHERE COALESCE(watchlist_flag, 0) = 1")
     watchlist_count = c.fetchone()["cnt"] or 0
 
     c.execute("""
         SELECT COUNT(DISTINCT igg_id) AS cnt
         FROM kill_report_rows
-        WHERE report_id = (
-            SELECT id
-            FROM kill_reports
-            ORDER BY generated_at DESC
-            LIMIT 1
-        )
+        WHERE report_id = (SELECT id FROM kill_reports ORDER BY generated_at DESC LIMIT 1)
         AND overall_pass = 0
     """)
     latest_kill_fail_count = c.fetchone()["cnt"] or 0
@@ -433,34 +471,18 @@ def get_dashboard_insights(conn):
     c.execute("""
         SELECT COUNT(*) AS cnt
         FROM guild_fest_report_rows
-        WHERE report_id = (
-            SELECT id
-            FROM guild_fest_reports
-            ORDER BY generated_at DESC
-            LIMIT 1
-        )
+        WHERE report_id = (SELECT id FROM guild_fest_reports ORDER BY generated_at DESC LIMIT 1)
         AND passed = 0
     """)
     latest_gf_fail_count = c.fetchone()["cnt"] or 0
 
-    c.execute("""
-        SELECT COUNT(*) AS cnt
-        FROM members
-        WHERE COALESCE(mana, 0) < 1
-    """)
+    c.execute("SELECT COUNT(*) AS cnt FROM members WHERE COALESCE(mana, 0) < 1")
     low_mana_count = c.fetchone()["cnt"] or 0
 
-    c.execute("""
-        SELECT COUNT(*) AS cnt
-        FROM members
-        WHERE COALESCE(sigils, 0) < 80
-    """)
+    c.execute("SELECT COUNT(*) AS cnt FROM members WHERE COALESCE(sigils, 0) < 80")
     low_sigils_count = c.fetchone()["cnt"] or 0
 
-    c.execute("""
-        SELECT COUNT(*) AS cnt
-        FROM pending_members
-    """)
+    c.execute("SELECT COUNT(*) AS cnt FROM pending_members")
     pending_count = c.fetchone()["cnt"] or 0
 
     return {
@@ -489,17 +511,7 @@ def dashboard(
     conn = get_conn()
     c = conn.cursor()
 
-    sql, params = build_members_query(
-        search=search,
-        rank_filter=rank_filter,
-        alt_filter=alt_filter,
-        troop_comp_filter=troop_comp_filter,
-        min_mana=min_mana,
-        min_sigils=min_sigils,
-        watchlist_only=watchlist_only,
-        sort_by=sort_by,
-        sort_dir=sort_dir
-    )
+    sql, params = build_members_query(search, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils, watchlist_only, sort_by, sort_dir)
     c.execute(sql, params)
     members = c.fetchall()
 
@@ -514,48 +526,34 @@ def dashboard(
     dashboard_insights = {}
 
     if is_admin(request):
-        c.execute("""
-            SELECT igg_id, name, watchlist_flag
-            FROM members
-            WHERE COALESCE(watchlist_flag, 0) = 1
-            ORDER BY LOWER(name)
-        """)
-        watchlisted = c.fetchall()
-        for member in watchlisted:
+        c.execute("SELECT igg_id, name FROM members WHERE COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)")
+        for member in c.fetchall():
             stats = get_member_fail_stats(conn, member["igg_id"], member["name"])
-            watchlist_summary.append({
-                "igg_id": member["igg_id"],
-                "name": member["name"],
-                **stats
-            })
+            watchlist_summary.append({"igg_id": member["igg_id"], "name": member["name"], **stats})
 
         watchlist_recommendations = get_watchlist_recommendations(conn)
         dashboard_insights = get_dashboard_insights(conn)
 
     conn.close()
 
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        {
-            "members": members,
-            "search": search,
-            "sort_by": sort_by,
-            "sort_dir": sort_dir,
-            "rank_filter": rank_filter,
-            "alt_filter": alt_filter,
-            "troop_comp_filter": troop_comp_filter,
-            "min_mana": min_mana,
-            "min_sigils": min_sigils,
-            "watchlist_only": watchlist_only,
-            "latest_kill_report": latest_kill_report,
-            "latest_guild_fest_report": latest_guild_fest_report,
-            "watchlist_summary": watchlist_summary,
-            "watchlist_recommendations": watchlist_recommendations,
-            "dashboard_insights": dashboard_insights,
-            "is_admin": is_admin(request)
-        }
-    )
+    return templates.TemplateResponse(request, "dashboard.html", {
+        "members": members,
+        "search": search,
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+        "rank_filter": rank_filter,
+        "alt_filter": alt_filter,
+        "troop_comp_filter": troop_comp_filter,
+        "min_mana": min_mana,
+        "min_sigils": min_sigils,
+        "watchlist_only": watchlist_only,
+        "latest_kill_report": latest_kill_report,
+        "latest_guild_fest_report": latest_guild_fest_report,
+        "watchlist_summary": watchlist_summary,
+        "watchlist_recommendations": watchlist_recommendations,
+        "dashboard_insights": dashboard_insights,
+        "is_admin": is_admin(request)
+    })
 
 
 @app.get("/pending-members", response_class=HTMLResponse)
@@ -569,14 +567,10 @@ def pending_members_page(request: Request):
     pending_members = c.fetchall()
     conn.close()
 
-    return templates.TemplateResponse(
-        request,
-        "pending_members.html",
-        {
-            "pending_members": pending_members,
-            "is_admin": True
-        }
-    )
+    return templates.TemplateResponse(request, "pending_members.html", {
+        "pending_members": pending_members,
+        "is_admin": True
+    })
 
 
 @app.post("/pending-members/{pending_id}/approve")
@@ -586,7 +580,6 @@ def approve_pending_member(request: Request, pending_id: int):
 
     conn = get_conn()
     c = conn.cursor()
-
     c.execute("SELECT * FROM pending_members WHERE id = ?", (pending_id,))
     pending = c.fetchone()
 
@@ -602,18 +595,11 @@ def approve_pending_member(request: Request, pending_id: int):
          communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        pending["igg_id"],
-        pending["name"],
-        pending["rank"],
-        pending["might"],
-        pending["kills"],
-        pending["edm"],
-        0, 0, 0, "N/A",
-        "N/A", "", "", 0, "", now, now
+        pending["igg_id"], pending["name"], pending["rank"], pending["might"], pending["kills"], pending["edm"],
+        0, 0, 0, "N/A", "N/A", "", "", 0, "", now, now
     ))
 
     c.execute("DELETE FROM pending_members WHERE id = ?", (pending_id,))
-
     conn.commit()
     conn.close()
 
@@ -645,11 +631,7 @@ def member_page(request: Request, igg_id: str):
         conn.close()
         return HTMLResponse("<h2>Member not found</h2>", status_code=404)
 
-    c.execute("""
-        SELECT * FROM name_history
-        WHERE igg_id = ?
-        ORDER BY changed_at DESC
-    """, (igg_id,))
+    c.execute("SELECT * FROM name_history WHERE igg_id = ? ORDER BY changed_at DESC", (igg_id,))
     history = c.fetchall()
 
     c.execute("""
@@ -673,18 +655,14 @@ def member_page(request: Request, igg_id: str):
     fail_stats = get_member_fail_stats(conn, igg_id, member["name"])
     conn.close()
 
-    return templates.TemplateResponse(
-        request,
-        "member.html",
-        {
-            "member": member,
-            "history": history,
-            "kill_history": kill_history,
-            "guild_fest_history": guild_fest_history,
-            "fail_stats": fail_stats,
-            "is_admin": is_admin(request)
-        }
-    )
+    return templates.TemplateResponse(request, "member.html", {
+        "member": member,
+        "history": history,
+        "kill_history": kill_history,
+        "guild_fest_history": guild_fest_history,
+        "fail_stats": fail_stats,
+        "is_admin": is_admin(request)
+    })
 
 
 @app.get("/member/{igg_id}/edit", response_class=HTMLResponse)
@@ -701,14 +679,10 @@ def edit_page(request: Request, igg_id: str):
     if not member:
         return HTMLResponse("<h2>Member not found</h2>", status_code=404)
 
-    return templates.TemplateResponse(
-        request,
-        "edit_member.html",
-        {
-            "member": member,
-            "is_admin": True
-        }
-    )
+    return templates.TemplateResponse(request, "edit_member.html", {
+        "member": member,
+        "is_admin": True
+    })
 
 
 @app.post("/member/{igg_id}/edit")
@@ -735,22 +709,19 @@ def edit_member(
     mana = max(0, min(6, int(mana)))
     sigils = max(0, int(sigils))
     alt_account_value = 1 if alt_account else 0
-    communication_method, whatsapp_number, discord_username = normalise_comm_fields(
-        communication_method, whatsapp_number, discord_username
-    )
+    communication_method, whatsapp_number, discord_username = normalise_comm_fields(communication_method, whatsapp_number, discord_username)
 
     conn = get_conn()
     c = conn.cursor()
-
     c.execute("SELECT name, watchlist_flag FROM members WHERE igg_id = ?", (igg_id,))
     row = c.fetchone()
+
     if not row:
         conn.close()
         return HTMLResponse("<h2>Member not found</h2>", status_code=404)
 
-    old_name = row["name"]
+    log_name_change(conn, igg_id, row["name"], name)
     existing_watchlist = 0 if row["watchlist_flag"] is None else int(row["watchlist_flag"])
-    log_name_change(conn, igg_id, old_name, name)
 
     c.execute("""
         UPDATE members
@@ -766,75 +737,11 @@ def edit_member(
 
     conn.commit()
     conn.close()
-
     return RedirectResponse(url=f"/member/{igg_id}", status_code=302)
 
 
-@app.post("/add")
-def add_member(
-    request: Request,
-    name: str = Form(...),
-    igg_id: str = Form(...),
-    rank: str = Form(...),
-    might: int = Form(...),
-    kills: int = Form(...),
-    edm: int = Form(...),
-    mana: int = Form(0),
-    sigils: int = Form(0),
-    alt_account: str | None = Form(default=None),
-    troop_comp: str = Form("N/A"),
-    communication_method: str = Form("N/A"),
-    whatsapp_number: str = Form(""),
-    discord_username: str = Form(""),
-    comments: str = Form("")
-):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    mana = max(0, min(6, int(mana)))
-    sigils = max(0, int(sigils))
-    alt_account_value = 1 if alt_account else 0
-    communication_method, whatsapp_number, discord_username = normalise_comm_fields(
-        communication_method, whatsapp_number, discord_username
-    )
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    conn = get_conn()
-    conn.execute("""
-        INSERT OR REPLACE INTO members
-        (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
-         communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        igg_id, name, rank, might, kills, edm, mana, sigils, alt_account_value, troop_comp,
-        communication_method, whatsapp_number, discord_username, 0, comments, now, now
-    ))
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url="/", status_code=302)
-
-
-@app.get("/delete/{igg_id}")
-def delete_member(request: Request, igg_id: str):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    conn = get_conn()
-    conn.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
-    conn.execute("DELETE FROM name_history WHERE igg_id = ?", (igg_id,))
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url="/", status_code=302)
-
-
 @app.post("/member/{igg_id}/watchlist")
-def toggle_watchlist(
-    request: Request,
-    igg_id: str,
-    watchlist_flag: int = Form(...)
-):
+def toggle_watchlist(request: Request, igg_id: str, watchlist_flag: int = Form(...)):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
@@ -853,24 +760,20 @@ def toggle_watchlist(
 def report_archive(request: Request):
     conn = get_conn()
     c = conn.cursor()
-
     c.execute("SELECT * FROM kill_reports ORDER BY generated_at DESC")
     kill_reports = c.fetchall()
-
     c.execute("SELECT * FROM guild_fest_reports ORDER BY generated_at DESC")
     guild_fest_reports = c.fetchall()
-
+    c.execute("SELECT * FROM guild_stat_snapshots ORDER BY imported_at DESC")
+    snapshots = c.fetchall()
     conn.close()
 
-    return templates.TemplateResponse(
-        request,
-        "report_archive.html",
-        {
-            "kill_reports": kill_reports,
-            "guild_fest_reports": guild_fest_reports,
-            "is_admin": is_admin(request)
-        }
-    )
+    return templates.TemplateResponse(request, "report_archive.html", {
+        "kill_reports": kill_reports,
+        "guild_fest_reports": guild_fest_reports,
+        "snapshots": snapshots,
+        "is_admin": is_admin(request)
+    })
 
 
 @app.get("/reports/delete/{report_type}/{report_id}", response_class=HTMLResponse)
@@ -883,47 +786,92 @@ def confirm_delete_report_page(request: Request, report_type: str, report_id: in
 
     conn = get_conn()
     c = conn.cursor()
-
     if report_type == "kills":
         c.execute("SELECT * FROM kill_reports WHERE id = ?", (report_id,))
     else:
         c.execute("SELECT * FROM guild_fest_reports WHERE id = ?", (report_id,))
-
     report = c.fetchone()
     conn.close()
 
     if not report:
         return HTMLResponse("<h2>Report not found</h2>", status_code=404)
 
-    return templates.TemplateResponse(
-        request,
-        "confirm_delete_report.html",
-        {
-            "report": report,
-            "report_type": report_type,
-            "is_admin": True
-        }
-    )
+    return templates.TemplateResponse(request, "confirm_delete_report.html", {
+        "report": report,
+        "report_type": report_type,
+        "is_admin": True
+    })
 
 
 @app.post("/reports/delete/{report_type}/{report_id}")
-def delete_report(request: Request, report_type: str, report_id: int):
+def delete_report(request: Request, report_type: str, report_id: int, confirm_text: str = Form(...)):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
-
-    if report_type not in ["kills", "guildfest"]:
-        return HTMLResponse("<h2>Invalid report type</h2>", status_code=400)
 
     conn = get_conn()
     c = conn.cursor()
 
     if report_type == "kills":
+        c.execute("SELECT report_name FROM kill_reports WHERE id = ?", (report_id,))
+        report = c.fetchone()
+        if not report or confirm_text != report["report_name"]:
+            conn.close()
+            return HTMLResponse("<h2>Confirmation text did not match report name.</h2>", status_code=400)
         c.execute("DELETE FROM kill_report_rows WHERE report_id = ?", (report_id,))
         c.execute("DELETE FROM kill_reports WHERE id = ?", (report_id,))
-    else:
+    elif report_type == "guildfest":
+        c.execute("SELECT report_name FROM guild_fest_reports WHERE id = ?", (report_id,))
+        report = c.fetchone()
+        if not report or confirm_text != report["report_name"]:
+            conn.close()
+            return HTMLResponse("<h2>Confirmation text did not match report name.</h2>", status_code=400)
         c.execute("DELETE FROM guild_fest_report_rows WHERE report_id = ?", (report_id,))
         c.execute("DELETE FROM guild_fest_reports WHERE id = ?", (report_id,))
+    else:
+        conn.close()
+        return HTMLResponse("<h2>Invalid report type</h2>", status_code=400)
 
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/reports/archive", status_code=302)
+
+
+@app.get("/snapshots/delete/{snapshot_id}", response_class=HTMLResponse)
+def confirm_delete_snapshot_page(request: Request, snapshot_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM guild_stat_snapshots WHERE id = ?", (snapshot_id,))
+    snapshot = c.fetchone()
+    conn.close()
+
+    if not snapshot:
+        return HTMLResponse("<h2>Snapshot not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(request, "confirm_delete_snapshot.html", {
+        "snapshot": snapshot,
+        "is_admin": True
+    })
+
+
+@app.post("/snapshots/delete/{snapshot_id}")
+def delete_snapshot(request: Request, snapshot_id: int, confirm_text: str = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT snapshot_name FROM guild_stat_snapshots WHERE id = ?", (snapshot_id,))
+    snapshot = c.fetchone()
+
+    if not snapshot or confirm_text != snapshot["snapshot_name"]:
+        conn.close()
+        return HTMLResponse("<h2>Confirmation text did not match snapshot name.</h2>", status_code=400)
+
+    c.execute("DELETE FROM guild_stat_snapshot_rows WHERE snapshot_id = ?", (snapshot_id,))
+    c.execute("DELETE FROM guild_stat_snapshots WHERE id = ?", (snapshot_id,))
     conn.commit()
     conn.close()
 
@@ -935,17 +883,16 @@ def confirm_delete_all_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    return templates.TemplateResponse(
-        request,
-        "confirm_delete_all.html",
-        {"is_admin": True}
-    )
+    return templates.TemplateResponse(request, "confirm_delete_all.html", {"is_admin": True})
 
 
 @app.post("/admin/delete-all")
-def delete_all_players(request: Request):
+def delete_all_players(request: Request, confirm_text: str = Form(...)):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
+
+    if confirm_text != "DELETE ALL PLAYERS":
+        return HTMLResponse("<h2>Confirmation text did not match. No players were deleted.</h2>", status_code=400)
 
     conn = get_conn()
     c = conn.cursor()
@@ -958,421 +905,12 @@ def delete_all_players(request: Request):
     return RedirectResponse(url="/", status_code=302)
 
 
-@app.get("/admin/login", response_class=HTMLResponse)
-def admin_login_page(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "admin_login.html",
-        {
-            "error": "",
-            "is_admin": is_admin(request)
-        }
-    )
-
-
-@app.post("/admin/login")
-def admin_login(request: Request, password: str = Form(...)):
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
-
-    if password == admin_password:
-        request.session["is_admin"] = True
-        return RedirectResponse(url="/", status_code=302)
-
-    return templates.TemplateResponse(
-        request,
-        "admin_login.html",
-        {
-            "error": "Incorrect admin password.",
-            "is_admin": False
-        },
-        status_code=401
-    )
-
-
-@app.get("/admin/logout")
-def admin_logout(request: Request):
-    request.session.clear()
-    return RedirectResponse(url="/", status_code=302)
-
-
-@app.get("/import", response_class=HTMLResponse)
-def import_page(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    return templates.TemplateResponse(
-        request,
-        "import.html",
-        {"is_admin": True}
-    )
-
-
-@app.post("/import")
-async def import_excel(request: Request, file: UploadFile = File(...)):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    filename = (file.filename or "").lower()
-    if filename.endswith(".csv"):
-        df = pd.read_csv(file.file)
-    else:
-        df = pd.read_excel(file.file)
-
-    df.columns = [str(c).strip() for c in df.columns]
-
-    required_columns = ["Name", "User ID", "Rank", "Might", "Kills", "Enemies Destroyed Might"]
-    missing = [col for col in required_columns if col not in df.columns]
-    if missing:
-        return HTMLResponse(f"""
-        <html><body style="font-family: Arial; padding: 30px;">
-        <h2>Import failed</h2>
-        <p>Missing column(s): <strong>{", ".join(missing)}</strong></p>
-        <p>Columns found:</p>
-        <pre>{", ".join(df.columns)}</pre>
-        <a href="/import">Back to import</a>
-        </body></html>
-        """, status_code=400)
-
-    conn = get_conn()
-    c = conn.cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    snapshot_name = f"Guild Stats {now}"
-    c.execute("""
-        INSERT INTO guild_stat_snapshots (snapshot_name, imported_at, source_filename)
-        VALUES (?, ?, ?)
-    """, (snapshot_name, now, file.filename))
-    snapshot_id = c.lastrowid
-
-    for _, row in df.iterrows():
-        igg_id = str(row["User ID"]).strip()
-        if not igg_id or igg_id.lower() == "nan":
-            continue
-
-        name = str(row["Name"]).strip() if not pd.isna(row["Name"]) else ""
-        rank = str(row["Rank"]).strip() if not pd.isna(row["Rank"]) else ""
-        might = 0 if pd.isna(row["Might"]) else int(float(row["Might"]))
-        kills = 0 if pd.isna(row["Kills"]) else int(float(row["Kills"]))
-        edm = 0 if pd.isna(row["Enemies Destroyed Might"]) else int(float(row["Enemies Destroyed Might"]))
-
-        if rank == "R1":
-            rank = "RANK1"
-        elif rank == "R2":
-            rank = "RANK2"
-        elif rank == "R3":
-            rank = "RANK3"
-        elif rank == "R4":
-            rank = "RANK4"
-        elif rank == "R5":
-            rank = "RANK5"
-
-        c.execute("""
-            INSERT INTO guild_stat_snapshot_rows
-            (snapshot_id, igg_id, player_name, rank, might, kills, edm)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (snapshot_id, igg_id, name, rank, might, kills, edm))
-
-        cur = conn.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
-        existing = cur.fetchone()
-
-        if existing:
-            log_name_change(conn, igg_id, existing["name"], name)
-
-            existing_comments = existing["comments"] or ""
-            existing_mana = 0 if existing["mana"] is None else int(existing["mana"])
-            existing_sigils = 0 if existing["sigils"] is None else int(existing["sigils"])
-            existing_alt_account = 0 if existing["alt_account"] is None else int(existing["alt_account"])
-            existing_troop_comp = existing["troop_comp"] or "N/A"
-            existing_comm_method = existing["communication_method"] or "N/A"
-            existing_whatsapp = existing["whatsapp_number"] or ""
-            existing_discord = existing["discord_username"] or ""
-            existing_watchlist = 0 if existing["watchlist_flag"] is None else int(existing["watchlist_flag"])
-
-            conn.execute("""
-                UPDATE members
-                SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
-                    alt_account = ?, troop_comp = ?, communication_method = ?, whatsapp_number = ?, discord_username = ?,
-                    watchlist_flag = ?, comments = ?, updated_at = ?
-                WHERE igg_id = ?
-            """, (
-                name, rank, might, kills, edm, existing_mana, existing_sigils,
-                existing_alt_account, existing_troop_comp, existing_comm_method, existing_whatsapp, existing_discord,
-                existing_watchlist, existing_comments, now, igg_id
-            ))
-        else:
-            conn.execute("""
-                INSERT INTO pending_members
-                (igg_id, name, rank, might, kills, edm, source_filename, imported_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(igg_id) DO UPDATE SET
-                    name = excluded.name,
-                    rank = excluded.rank,
-                    might = excluded.might,
-                    kills = excluded.kills,
-                    edm = excluded.edm,
-                    source_filename = excluded.source_filename,
-                    imported_at = excluded.imported_at
-            """, (
-                igg_id, name, rank, might, kills, edm, file.filename, now
-            ))
-
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url="/", status_code=302)
-
-
-@app.get("/reports/kills/create", response_class=HTMLResponse)
-def create_kill_report_page(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT * FROM guild_stat_snapshots ORDER BY imported_at DESC")
-    snapshots = c.fetchall()
-    conn.close()
-
-    return templates.TemplateResponse(
-        request,
-        "create_kill_report.html",
-        {"snapshots": snapshots, "is_admin": True}
-    )
-
-
-@app.post("/reports/kills/create")
-def create_kill_report(
-    request: Request,
-    report_name: str = Form(...),
-    start_snapshot_id: int = Form(...),
-    end_snapshot_id: int = Form(...),
-    target_kill_increase: str = Form(""),
-    target_edm_increase: str = Form(""),
-    target_edm_per_kill: str = Form("")
-):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    target_kill = int(target_kill_increase) if str(target_kill_increase).strip() else None
-    target_edm = int(target_edm_increase) if str(target_edm_increase).strip() else None
-    target_edm_pk = int(target_edm_per_kill) if str(target_edm_per_kill).strip() else None
-
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM guild_stat_snapshot_rows WHERE snapshot_id = ?", (start_snapshot_id,))
-    start_rows = c.fetchall()
-    c.execute("SELECT * FROM guild_stat_snapshot_rows WHERE snapshot_id = ?", (end_snapshot_id,))
-    end_rows = c.fetchall()
-
-    start_map = {row["igg_id"]: row for row in start_rows}
-    end_map = {row["igg_id"]: row for row in end_rows}
-    common_ids = sorted(set(start_map.keys()) & set(end_map.keys()))
-
-    report_rows = []
-    for igg_id in common_ids:
-        start_row = start_map[igg_id]
-        end_row = end_map[igg_id]
-
-        kill_increase = int(end_row["kills"] or 0) - int(start_row["kills"] or 0)
-        edm_increase = int(end_row["edm"] or 0) - int(start_row["edm"] or 0)
-
-        edm_per_kill = 0
-        if kill_increase > 0:
-            edm_per_kill = round(edm_increase / kill_increase)
-
-        pass_kills = None if target_kill is None else int(kill_increase >= target_kill)
-        pass_edm = None if target_edm is None else int(edm_increase >= target_edm)
-        pass_edm_pk = None if target_edm_pk is None else int(edm_per_kill >= target_edm_pk)
-
-        checks = [x for x in [pass_kills, pass_edm, pass_edm_pk] if x is not None]
-        overall_pass = None if not checks else int(all(x == 1 for x in checks))
-
-        report_rows.append({
-            "igg_id": igg_id,
-            "player_name": end_row["player_name"],
-            "kill_increase": kill_increase,
-            "edm_increase": edm_increase,
-            "edm_per_kill": edm_per_kill,
-            "pass_kills": pass_kills,
-            "pass_edm": pass_edm,
-            "pass_edm_per_kill": pass_edm_pk,
-            "overall_pass": overall_pass
-        })
-
-    avg_kills = round(sum(r["kill_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
-    avg_edm = round(sum(r["edm_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
-    avg_edm_pk = round(sum(r["edm_per_kill"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
-
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    c.execute("""
-        INSERT INTO kill_reports
-        (report_name, generated_at, start_snapshot_id, end_snapshot_id,
-         target_kill_increase, target_edm_increase, target_edm_per_kill,
-         avg_kill_increase, avg_edm_increase, avg_edm_per_kill)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        report_name, generated_at, start_snapshot_id, end_snapshot_id,
-        target_kill, target_edm, target_edm_pk,
-        avg_kills, avg_edm, avg_edm_pk
-    ))
-    report_id = c.lastrowid
-
-    for row in report_rows:
-        c.execute("""
-            INSERT INTO kill_report_rows
-            (report_id, igg_id, player_name, kill_increase, edm_increase, edm_per_kill,
-             pass_kills, pass_edm, pass_edm_per_kill, overall_pass)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            report_id, row["igg_id"], row["player_name"],
-            row["kill_increase"], row["edm_increase"], row["edm_per_kill"],
-            row["pass_kills"], row["pass_edm"], row["pass_edm_per_kill"], row["overall_pass"]
-        ))
-
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url=f"/reports/kills/{report_id}", status_code=302)
-
-
-@app.get("/reports/kills/{report_id}", response_class=HTMLResponse)
-def view_kill_report(request: Request, report_id: int):
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM kill_reports WHERE id = ?", (report_id,))
-    report = c.fetchone()
-    c.execute("SELECT * FROM kill_report_rows WHERE report_id = ? ORDER BY kill_increase DESC", (report_id,))
-    rows = c.fetchall()
-
-    conn.close()
-
-    if not report:
-        return HTMLResponse("<h2>Kill report not found</h2>", status_code=404)
-
-    return templates.TemplateResponse(
-        request,
-        "kill_report.html",
-        {"report": report, "rows": rows, "is_admin": is_admin(request)}
-    )
-
-
-@app.get("/reports/guildfest/create", response_class=HTMLResponse)
-def create_guild_fest_report_page(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    return templates.TemplateResponse(
-        request,
-        "create_guild_fest_report.html",
-        {"is_admin": True}
-    )
-
-
-@app.post("/reports/guildfest/create")
-async def create_guild_fest_report(
-    request: Request,
-    report_name: str = Form(...),
-    pass_score: int = Form(...),
-    file: UploadFile = File(...)
-):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    filename = (file.filename or "").lower()
-    if filename.endswith(".csv"):
-        df = pd.read_csv(file.file)
-    else:
-        df = pd.read_excel(file.file)
-
-    df.columns = [str(c).strip() for c in df.columns]
-
-    required_columns = ["Name", "Completed", "Total", "Score", "Completed Bonus"]
-    missing = [col for col in required_columns if col not in df.columns]
-    if missing:
-        return HTMLResponse(f"""
-        <html><body style="font-family: Arial; padding: 30px;">
-        <h2>Guild Fest import failed</h2>
-        <p>Missing column(s): <strong>{", ".join(missing)}</strong></p>
-        <p>Columns found:</p>
-        <pre>{", ".join(df.columns)}</pre>
-        <a href="/reports/guildfest/create">Back</a>
-        </body></html>
-        """, status_code=400)
-
-    conn = get_conn()
-    c = conn.cursor()
-
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    avg_score = round(float(df["Score"].fillna(0).mean()), 2) if len(df.index) > 0 else 0
-
-    c.execute("""
-        INSERT INTO guild_fest_reports
-        (report_name, generated_at, source_filename, pass_score, avg_score)
-        VALUES (?, ?, ?, ?, ?)
-    """, (report_name, generated_at, file.filename, pass_score, avg_score))
-    report_id = c.lastrowid
-
-    for _, row in df.iterrows():
-        player_name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
-        if not player_name:
-            continue
-
-        completed = 0 if pd.isna(row["Completed"]) else int(float(row["Completed"]))
-        total = 0 if pd.isna(row["Total"]) else int(float(row["Total"]))
-        score = 0 if pd.isna(row["Score"]) else int(float(row["Score"]))
-        completed_bonus = "" if pd.isna(row["Completed Bonus"]) else str(row["Completed Bonus"]).strip()
-        passed = int(score >= pass_score)
-
-        c.execute("""
-            INSERT INTO guild_fest_report_rows
-            (report_id, player_name, guild_fest_score, completed, total, completed_bonus, passed)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (report_id, player_name, score, completed, total, completed_bonus, passed))
-
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url=f"/reports/guildfest/{report_id}", status_code=302)
-
-
-@app.get("/reports/guildfest/{report_id}", response_class=HTMLResponse)
-def view_guild_fest_report(request: Request, report_id: int):
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM guild_fest_reports WHERE id = ?", (report_id,))
-    report = c.fetchone()
-    c.execute("""
-        SELECT * FROM guild_fest_report_rows
-        WHERE report_id = ?
-        ORDER BY guild_fest_score DESC
-    """, (report_id,))
-    rows = c.fetchall()
-
-    conn.close()
-
-    if not report:
-        return HTMLResponse("<h2>Guild Fest report not found</h2>", status_code=404)
-
-    return templates.TemplateResponse(
-        request,
-        "guild_fest_report.html",
-        {"report": report, "rows": rows, "is_admin": is_admin(request)}
-    )
-
-
 @app.get("/backup", response_class=HTMLResponse)
 def backup_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    return templates.TemplateResponse(
-        request,
-        "backup_restore.html",
-        {"is_admin": True}
-    )
+    return templates.TemplateResponse(request, "backup_restore.html", {"is_admin": True})
 
 
 @app.get("/backup/download")
@@ -1389,9 +927,12 @@ def download_backup(request: Request):
 
 
 @app.post("/backup/restore")
-async def restore_backup(request: Request, file: UploadFile = File(...)):
+async def restore_backup(request: Request, file: UploadFile = File(...), confirm_text: str = Form(...)):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
+
+    if confirm_text != "RESTORE DATABASE":
+        return HTMLResponse("<h2>Confirmation text did not match. Database was not restored.</h2>", status_code=400)
 
     suffix = Path(file.filename or "backup.db").suffix.lower()
     if suffix != ".db":
@@ -1421,3 +962,414 @@ async def restore_backup(request: Request, file: UploadFile = File(...)):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         return HTMLResponse(f"<h2>Restore failed: {e}</h2>", status_code=500)
+
+
+@app.get("/data/export-excel")
+def export_all_data_excel(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        for table in TABLES:
+            try:
+                df = pd.read_sql_query(f"SELECT * FROM {table}", conn)
+                df.to_excel(writer, sheet_name=table[:31], index=False)
+            except Exception:
+                pass
+
+    conn.close()
+    output.seek(0)
+
+    filename = f"mj_guild_full_data_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@app.post("/data/import-excel")
+async def import_all_data_excel(request: Request, file: UploadFile = File(...), confirm_text: str = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    if confirm_text != "IMPORT EXCEL DATA":
+        return HTMLResponse("<h2>Confirmation text did not match. Excel data was not imported.</h2>", status_code=400)
+
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        return HTMLResponse("<h2>Please upload an .xlsx file exported from this app.</h2>", status_code=400)
+
+    excel_data = pd.read_excel(file.file, sheet_name=None)
+    conn = get_conn()
+    c = conn.cursor()
+
+    try:
+        for table in reversed(TABLES):
+            c.execute(f"DELETE FROM {table}")
+
+        for table in TABLES:
+            if table not in excel_data:
+                continue
+
+            df = excel_data[table]
+            if df.empty:
+                continue
+
+            df = df.where(pd.notna(df), None)
+            cols = list(df.columns)
+            placeholders = ",".join(["?"] * len(cols))
+            col_sql = ",".join(cols)
+
+            for _, row in df.iterrows():
+                values = [None if pd.isna(row[col]) else row[col] for col in cols]
+                c.execute(f"INSERT INTO {table} ({col_sql}) VALUES ({placeholders})", values)
+
+        conn.commit()
+        conn.close()
+        return RedirectResponse(url="/backup", status_code=302)
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return HTMLResponse(f"<h2>Excel import failed: {e}</h2>", status_code=500)
+
+
+@app.get("/snapshots/create")
+def manual_snapshot(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    create_current_roster_snapshot(source_filename="Manual snapshot from admin")
+    return RedirectResponse(url="/reports/archive", status_code=302)
+
+
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(request: Request):
+    return templates.TemplateResponse(request, "admin_login.html", {"error": "", "is_admin": is_admin(request)})
+
+
+@app.post("/admin/login")
+def admin_login(request: Request, password: str = Form(...)):
+    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    if password == admin_password:
+        request.session["is_admin"] = True
+        return RedirectResponse(url="/", status_code=302)
+
+    return templates.TemplateResponse(request, "admin_login.html", {
+        "error": "Incorrect admin password.",
+        "is_admin": False
+    }, status_code=401)
+
+
+@app.get("/admin/logout")
+def admin_logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/import", response_class=HTMLResponse)
+def import_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    return templates.TemplateResponse(request, "import.html", {"is_admin": True})
+
+
+@app.post("/import")
+async def import_excel(request: Request, file: UploadFile = File(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    filename = (file.filename or "").lower()
+    if filename.endswith(".csv"):
+        df = pd.read_csv(file.file)
+    else:
+        df = pd.read_excel(file.file)
+
+    df.columns = [str(c).strip() for c in df.columns]
+    required_columns = ["Name", "User ID", "Rank", "Might", "Kills", "Enemies Destroyed Might"]
+    missing = [col for col in required_columns if col not in df.columns]
+
+    if missing:
+        return HTMLResponse(f"""
+        <html><body style="font-family: Arial; padding: 30px;">
+        <h2>Import failed</h2>
+        <p>Missing column(s): <strong>{", ".join(missing)}</strong></p>
+        <p>Columns found:</p>
+        <pre>{", ".join(df.columns)}</pre>
+        <a href="/import">Back to import</a>
+        </body></html>
+        """, status_code=400)
+
+    conn = get_conn()
+    c = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    snapshot_name = f"Guild Stats {now}"
+    c.execute("""
+        INSERT INTO guild_stat_snapshots (snapshot_name, imported_at, source_filename)
+        VALUES (?, ?, ?)
+    """, (snapshot_name, now, file.filename))
+    snapshot_id = c.lastrowid
+
+    for _, row in df.iterrows():
+        igg_id = str(row["User ID"]).strip()
+        if not igg_id or igg_id.lower() == "nan":
+            continue
+
+        name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
+        rank = "" if pd.isna(row["Rank"]) else str(row["Rank"]).strip()
+        might = 0 if pd.isna(row["Might"]) else int(float(row["Might"]))
+        kills = 0 if pd.isna(row["Kills"]) else int(float(row["Kills"]))
+        edm = 0 if pd.isna(row["Enemies Destroyed Might"]) else int(float(row["Enemies Destroyed Might"]))
+
+        rank_map = {"R1": "RANK1", "R2": "RANK2", "R3": "RANK3", "R4": "RANK4", "R5": "RANK5"}
+        rank = rank_map.get(rank, rank)
+
+        c.execute("""
+            INSERT INTO guild_stat_snapshot_rows
+            (snapshot_id, igg_id, player_name, rank, might, kills, edm)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (snapshot_id, igg_id, name, rank, might, kills, edm))
+
+        c.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
+        existing = c.fetchone()
+
+        if existing:
+            log_name_change(conn, igg_id, existing["name"], name)
+            c.execute("""
+                UPDATE members
+                SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, updated_at = ?
+                WHERE igg_id = ?
+            """, (name, rank, might, kills, edm, now, igg_id))
+        else:
+            c.execute("""
+                INSERT INTO pending_members
+                (igg_id, name, rank, might, kills, edm, source_filename, imported_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(igg_id) DO UPDATE SET
+                    name = excluded.name,
+                    rank = excluded.rank,
+                    might = excluded.might,
+                    kills = excluded.kills,
+                    edm = excluded.edm,
+                    source_filename = excluded.source_filename,
+                    imported_at = excluded.imported_at
+            """, (igg_id, name, rank, might, kills, edm, file.filename, now))
+
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/reports/kills/create", response_class=HTMLResponse)
+def create_kill_report_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM guild_stat_snapshots ORDER BY imported_at DESC")
+    snapshots = c.fetchall()
+    conn.close()
+
+    return templates.TemplateResponse(request, "create_kill_report.html", {
+        "snapshots": snapshots,
+        "is_admin": True
+    })
+
+
+@app.post("/reports/kills/create")
+def create_kill_report(
+    request: Request,
+    report_name: str = Form(...),
+    start_snapshot_id: int = Form(...),
+    end_snapshot_id: int = Form(...),
+    target_kill_increase: str = Form(""),
+    target_edm_increase: str = Form(""),
+    target_edm_per_kill: str = Form("")
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    target_kill = int(target_kill_increase) if str(target_kill_increase).strip() else None
+    target_edm = int(target_edm_increase) if str(target_edm_increase).strip() else None
+    target_edm_pk = int(target_edm_per_kill) if str(target_edm_per_kill).strip() else None
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM guild_stat_snapshot_rows WHERE snapshot_id = ?", (start_snapshot_id,))
+    start_rows = c.fetchall()
+
+    c.execute("SELECT * FROM guild_stat_snapshot_rows WHERE snapshot_id = ?", (end_snapshot_id,))
+    end_rows = c.fetchall()
+
+    start_map = {row["igg_id"]: row for row in start_rows}
+    end_map = {row["igg_id"]: row for row in end_rows}
+    common_ids = sorted(set(start_map.keys()) & set(end_map.keys()))
+
+    report_rows = []
+
+    for igg_id in common_ids:
+        start_row = start_map[igg_id]
+        end_row = end_map[igg_id]
+
+        kill_increase = int(end_row["kills"] or 0) - int(start_row["kills"] or 0)
+        edm_increase = int(end_row["edm"] or 0) - int(start_row["edm"] or 0)
+        edm_per_kill = round(edm_increase / kill_increase) if kill_increase > 0 else 0
+
+        pass_kills = None if target_kill is None else int(kill_increase >= target_kill)
+        pass_edm = None if target_edm is None else int(edm_increase >= target_edm)
+        pass_edm_pk = None if target_edm_pk is None else int(edm_per_kill >= target_edm_pk)
+
+        checks = [x for x in [pass_kills, pass_edm, pass_edm_pk] if x is not None]
+        overall_pass = None if not checks else int(all(x == 1 for x in checks))
+
+        report_rows.append({
+            "igg_id": igg_id,
+            "player_name": end_row["player_name"],
+            "kill_increase": kill_increase,
+            "edm_increase": edm_increase,
+            "edm_per_kill": edm_per_kill,
+            "pass_kills": pass_kills,
+            "pass_edm": pass_edm,
+            "pass_edm_per_kill": pass_edm_pk,
+            "overall_pass": overall_pass
+        })
+
+    avg_kills = round(sum(r["kill_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
+    avg_edm = round(sum(r["edm_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
+    avg_edm_pk = round(sum(r["edm_per_kill"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+        INSERT INTO kill_reports
+        (report_name, generated_at, start_snapshot_id, end_snapshot_id,
+         target_kill_increase, target_edm_increase, target_edm_per_kill,
+         avg_kill_increase, avg_edm_increase, avg_edm_per_kill)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        report_name, generated_at, start_snapshot_id, end_snapshot_id,
+        target_kill, target_edm, target_edm_pk, avg_kills, avg_edm, avg_edm_pk
+    ))
+
+    report_id = c.lastrowid
+
+    for row in report_rows:
+        c.execute("""
+            INSERT INTO kill_report_rows
+            (report_id, igg_id, player_name, kill_increase, edm_increase, edm_per_kill,
+             pass_kills, pass_edm, pass_edm_per_kill, overall_pass)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            report_id, row["igg_id"], row["player_name"],
+            row["kill_increase"], row["edm_increase"], row["edm_per_kill"],
+            row["pass_kills"], row["pass_edm"], row["pass_edm_per_kill"], row["overall_pass"]
+        ))
+
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/reports/kills/{report_id}", status_code=302)
+
+
+@app.get("/reports/kills/{report_id}", response_class=HTMLResponse)
+def view_kill_report(request: Request, report_id: int):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM kill_reports WHERE id = ?", (report_id,))
+    report = c.fetchone()
+    c.execute("SELECT * FROM kill_report_rows WHERE report_id = ? ORDER BY kill_increase DESC", (report_id,))
+    rows = c.fetchall()
+    conn.close()
+
+    if not report:
+        return HTMLResponse("<h2>Kill report not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(request, "kill_report.html", {
+        "report": report,
+        "rows": rows,
+        "is_admin": is_admin(request)
+    })
+
+
+@app.get("/reports/guildfest/create", response_class=HTMLResponse)
+def create_guild_fest_report_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    return templates.TemplateResponse(request, "create_guild_fest_report.html", {"is_admin": True})
+
+
+@app.post("/reports/guildfest/create")
+async def create_guild_fest_report(request: Request, report_name: str = Form(...), pass_score: int = Form(...), file: UploadFile = File(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    filename = (file.filename or "").lower()
+    df = pd.read_csv(file.file) if filename.endswith(".csv") else pd.read_excel(file.file)
+    df.columns = [str(c).strip() for c in df.columns]
+
+    required_columns = ["Name", "Completed", "Total", "Score", "Completed Bonus"]
+    missing = [col for col in required_columns if col not in df.columns]
+
+    if missing:
+        return HTMLResponse(f"<h2>Guild Fest import failed. Missing: {', '.join(missing)}</h2>", status_code=400)
+
+    conn = get_conn()
+    c = conn.cursor()
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    avg_score = round(float(df["Score"].fillna(0).mean()), 2) if len(df.index) > 0 else 0
+
+    c.execute("""
+        INSERT INTO guild_fest_reports
+        (report_name, generated_at, source_filename, pass_score, avg_score)
+        VALUES (?, ?, ?, ?, ?)
+    """, (report_name, generated_at, file.filename, pass_score, avg_score))
+
+    report_id = c.lastrowid
+
+    for _, row in df.iterrows():
+        player_name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
+        if not player_name:
+            continue
+
+        completed = 0 if pd.isna(row["Completed"]) else int(float(row["Completed"]))
+        total = 0 if pd.isna(row["Total"]) else int(float(row["Total"]))
+        score = 0 if pd.isna(row["Score"]) else int(float(row["Score"]))
+        completed_bonus = "" if pd.isna(row["Completed Bonus"]) else str(row["Completed Bonus"]).strip()
+        passed = int(score >= pass_score)
+
+        c.execute("""
+            INSERT INTO guild_fest_report_rows
+            (report_id, player_name, guild_fest_score, completed, total, completed_bonus, passed)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (report_id, player_name, score, completed, total, completed_bonus, passed))
+
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/reports/guildfest/{report_id}", status_code=302)
+
+
+@app.get("/reports/guildfest/{report_id}", response_class=HTMLResponse)
+def view_guild_fest_report(request: Request, report_id: int):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM guild_fest_reports WHERE id = ?", (report_id,))
+    report = c.fetchone()
+    c.execute("SELECT * FROM guild_fest_report_rows WHERE report_id = ? ORDER BY guild_fest_score DESC", (report_id,))
+    rows = c.fetchall()
+    conn.close()
+
+    if not report:
+        return HTMLResponse("<h2>Guild Fest report not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(request, "guild_fest_report.html", {
+        "report": report,
+        "rows": rows,
+        "is_admin": is_admin(request)
+    })
