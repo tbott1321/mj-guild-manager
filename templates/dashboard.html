@@ -567,7 +567,6 @@
                 </select>
 
                 <input type="number" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
-
                 <input type="number" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
 
                 {% if is_admin %}
@@ -578,7 +577,6 @@
                 {% endif %}
 
                 <button class="search-btn" type="submit">Apply Filters</button>
-
                 <a href="/" class="reset-btn">Reset</a>
             </div>
         </form>
@@ -587,13 +585,47 @@
     <table>
         <thead>
             <tr>
-                <th><a href="/?sort_by=name">Name</a></th>
-                <th><a href="/?sort_by=rank">Rank</a></th>
-                <th><a href="/?sort_by=might">Might</a></th>
-                <th><a href="/?sort_by=kills">Kills</a></th>
-                <th><a href="/?sort_by=edm">EDM</a></th>
-                <th>Mana</th>
-                <th>Sigils</th>
+                <th>
+                    <a href="/?sort_by=name&sort_dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Name
+                    </a>
+                </th>
+
+                <th>
+                    <a href="/?sort_by=rank&sort_dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Rank
+                    </a>
+                </th>
+
+                <th>
+                    <a href="/?sort_by=might&sort_dir={% if sort_by == 'might' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Might
+                    </a>
+                </th>
+
+                <th>
+                    <a href="/?sort_by=kills&sort_dir={% if sort_by == 'kills' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Kills
+                    </a>
+                </th>
+
+                <th>
+                    <a href="/?sort_by=edm&sort_dir={% if sort_by == 'edm' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        EDM
+                    </a>
+                </th>
+
+                <th>
+                    <a href="/?sort_by=mana&sort_dir={% if sort_by == 'mana' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Mana
+                    </a>
+                </th>
+
+                <th>
+                    <a href="/?sort_by=sigils&sort_dir={% if sort_by == 'sigils' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Sigils
+                    </a>
+                </th>
             </tr>
         </thead>
 

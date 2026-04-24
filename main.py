@@ -196,6 +196,7 @@ def init_db():
             c.execute(f"ALTER TABLE members ADD COLUMN {col} {definition}")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank IS NULL OR TRIM(rank) = ''")
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank = 'R1'")
     c.execute("UPDATE members SET rank = 'RANK2' WHERE rank = 'R2'")
@@ -213,6 +214,7 @@ def init_db():
     c.execute("UPDATE members SET watchlist_flag = COALESCE(watchlist_flag, 0)")
     c.execute("UPDATE members SET created_at = COALESCE(created_at, ?) WHERE created_at IS NULL OR TRIM(created_at) = ''", (now,))
     c.execute("UPDATE members SET updated_at = COALESCE(updated_at, ?) WHERE updated_at IS NULL OR TRIM(updated_at) = ''", (now,))
+
     conn.commit()
     conn.close()
 
@@ -331,15 +333,20 @@ def get_sort_sql(sort_by, sort_dir):
             ELSE 0
         END
     """
+
     sort_map = {
         "name": "LOWER(COALESCE(name, ''))",
         "might": "COALESCE(might, 0)",
         "kills": "COALESCE(kills, 0)",
         "rank": rank_sort,
-        "edm": "COALESCE(edm, 0)"
+        "edm": "COALESCE(edm, 0)",
+        "mana": "COALESCE(mana, 0)",
+        "sigils": "COALESCE(sigils, 0)"
     }
+
     sort_column = sort_map.get(sort_by, "COALESCE(might, 0)")
     direction = "ASC" if sort_dir == "asc" else "DESC"
+
     return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
