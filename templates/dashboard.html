@@ -64,31 +64,39 @@
 
         .stats-box {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            grid-template-columns:
+                minmax(120px, 0.7fr)
+                minmax(260px, 1.4fr)
+                minmax(250px, 1.35fr)
+                minmax(300px, 1.6fr)
+                minmax(150px, 0.8fr)
+                minmax(120px, 0.7fr)
+                minmax(120px, 0.7fr);
             gap: 20px;
+            overflow-x: auto;
         }
 
         .stat-card {
             background: #f8fafc;
-            padding: 16px;
+            padding: 16px 20px;
             border-radius: 12px;
-            min-height: 80px;
+            min-height: 100px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
 
         .stat-title {
-            color: gray;
+            color: #6b7280;
             font-size: 13px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
         .stat-value {
-            font-size: 22px;
+            font-size: 25px;
             font-weight: bold;
-            line-height: 1.2;
-            word-break: break-word;
+            line-height: 1.15;
+            white-space: nowrap;
         }
 
         .report-section h2,
@@ -279,12 +287,33 @@
         }
 
         @media (max-width: 1100px) {
+            .stats-box {
+                grid-template-columns:
+                    minmax(120px, 0.7fr)
+                    minmax(250px, 1.35fr)
+                    minmax(240px, 1.3fr)
+                    minmax(280px, 1.5fr)
+                    minmax(140px, 0.75fr)
+                    minmax(120px, 0.7fr)
+                    minmax(120px, 0.7fr);
+            }
+
             .insight-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
 
         @media (max-width: 768px) {
+            .stats-box {
+                grid-template-columns: 1fr;
+                overflow-x: visible;
+            }
+
+            .stat-value {
+                white-space: normal;
+                font-size: 24px;
+            }
+
             table {
                 display: none;
             }
