@@ -570,7 +570,7 @@
                     type="text"
                     name="search"
                     value="{{ search }}"
-                    placeholder="Search by name, User ID, rank, might, kills, EDM, or kingdom"
+                    placeholder="{% if is_admin %}Search by name, User ID, rank, might, kills, EDM, or kingdom{% else %}Search by name, rank, might, kills, EDM, or kingdom{% endif %}"
                 >
 
                 <button class="search-btn" type="submit">Search</button>
@@ -625,11 +625,13 @@
                     </a>
                 </th>
 
+                {% if is_admin %}
                 <th>
                     <a href="/?sort_by=user_id&sort_dir={% if sort_by == 'user_id' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
                         User ID
                     </a>
                 </th>
+                {% endif %}
 
                 <th>
                     <a href="/?sort_by=rank&sort_dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -686,7 +688,9 @@
                     {% endif %}
                 </td>
 
+                {% if is_admin %}
                 <td>{{ member.igg_id }}</td>
+                {% endif %}
 
                 <td>{{ member.rank }}</td>
                 <td>{{ "{:,}".format(member.might or 0) }}</td>
@@ -718,7 +722,9 @@
             </h3>
 
             <p><strong>{{ member.rank }}</strong></p>
+            {% if is_admin %}
             <p>User ID: {{ member.igg_id }}</p>
+            {% endif %}
             <p>Might: {{ "{:,}".format(member.might or 0) }}</p>
             <p>Kills: {{ "{:,}".format(member.kills or 0) }}</p>
             <p>EDM: {{ "{:,}".format(member.edm or 0) }}</p>

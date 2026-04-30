@@ -384,7 +384,7 @@ def get_sort_sql(sort_by, sort_dir):
     return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
-def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc"):
+def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc", include_user_id_search=False):
     sql = """
         SELECT m.*,
         (SELECT MAX(changed_at) FROM name_history nh WHERE nh.igg_id = m.igg_id) AS last_name_change
@@ -395,19 +395,32 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
 
     search = (search or "").strip()
     if search:
-        sql += """
-            AND (
-                LOWER(COALESCE(m.name, '')) LIKE ?
-                OR LOWER(COALESCE(m.igg_id, '')) LIKE ?
-                OR LOWER(COALESCE(m.rank, '')) LIKE ?
-                OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
-                OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
-                OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
-                OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
-            )
-        """
         like_value = f"%{search.lower()}%"
-        params.extend([like_value] * 7)
+        if include_user_id_search:
+            sql += """
+                AND (
+                    LOWER(COALESCE(m.name, '')) LIKE ?
+                    OR LOWER(COALESCE(m.igg_id, '')) LIKE ?
+                    OR LOWER(COALESCE(m.rank, '')) LIKE ?
+                    OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
+                )
+            """
+            params.extend([like_value] * 7)
+        else:
+            sql += """
+                AND (
+                    LOWER(COALESCE(m.name, '')) LIKE ?
+                    OR LOWER(COALESCE(m.rank, '')) LIKE ?
+                    OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
+                )
+            """
+            params.extend([like_value] * 6)
 
     if rank_filter:
         sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
@@ -594,7 +607,11 @@ def dashboard(
     conn = get_conn()
     c = conn.cursor()
 
-    sql, params = build_members_query(search, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils, watchlist_only, sort_by, sort_dir)
+    admin_view = is_admin(request)
+    sql, params = build_members_query(
+        search, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils,
+        watchlist_only, sort_by, sort_dir, include_user_id_search=admin_view
+    )
     c.execute(sql, params)
     members = c.fetchall()
 
@@ -639,7 +656,7 @@ def dashboard(
         "watchlist_recommendations": watchlist_recommendations,
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
-        "is_admin": is_admin(request)
+        "is_admin": admin_view
     })
 
 
