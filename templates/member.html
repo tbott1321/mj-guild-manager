@@ -3,26 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ Guild Manager - Member</title>
+    <title>{{ member.name }}</title>
+
     <style>
-        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
-        body { margin: 0; background: #f3f4f6; color: #111827; }
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
         .topbar {
             background: linear-gradient(135deg, #111827, #1f2937, #312e81);
             color: white;
             padding: 22px 28px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
+
         .topbar-inner {
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
-            gap: 20px;
             align-items: center;
+            gap: 20px;
         }
-        .title { font-size: 26px; font-weight: 700; }
-        .back {
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .top-btn {
             text-decoration: none;
             color: white;
             background: rgba(255,255,255,0.12);
@@ -31,339 +52,414 @@
             border-radius: 12px;
             font-weight: 600;
         }
-        .container { max-width: 1000px; margin: 24px auto; padding: 0 20px 24px; }
-        .card {
-            background: white;
-            border-radius: 20px;
-            padding: 24px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-            margin-bottom: 24px;
+
+        .delete-top {
+            background: rgba(220,38,38,0.25);
+            border-color: rgba(255,255,255,0.2);
         }
+
+        .container {
+            max-width: 1100px;
+            margin: 24px auto;
+            padding: 0 20px 24px;
+        }
+
         .grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 22px;
         }
-        .item {
-            background: #f9fafb;
-            border-radius: 16px;
-            padding: 16px;
+
+        .card {
+            background: white;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 10px 24px rgba(15,23,42,.06);
+            margin-bottom: 22px;
         }
-        .label { color: #6b7280; font-size: 13px; margin-bottom: 6px; }
-        .value { font-size: 20px; font-weight: 700; }
+
+        h2 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        .stat {
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .label {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
         .pill {
             display: inline-block;
-            padding: 6px 10px;
+            padding: 5px 10px;
             border-radius: 999px;
-            background: #eef2ff;
-            color: #4338ca;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
         }
-        .watch {
-            background: #fef3c7;
-            color: #92400e;
-        }
-        .danger {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .good {
+
+        .pass {
             background: #dcfce7;
             color: #166534;
         }
-        .comments-box {
-            background: #f9fafb;
-            border-radius: 16px;
-            padding: 18px;
-            white-space: pre-wrap;
-            color: #374151;
-            line-height: 1.6;
-            min-height: 80px;
-        }
-        table { width: 100%; border-collapse: collapse; }
-        th {
-            background: #111827;
-            color: white;
-            text-align: left;
-            padding: 14px;
-            font-size: 14px;
-        }
-        td {
-            padding: 14px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 14px;
-        }
-        .empty {
-            padding: 18px;
-            background: #f9fafb;
-            border-radius: 14px;
-            color: #6b7280;
-        }
-        .button, .button-secondary {
-            display: inline-block;
-            text-decoration: none;
-            border: none;
-            border-radius: 12px;
-            padding: 12px 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .button {
-            background: linear-gradient(135deg, #6366f1, #7c3aed);
-            color: white;
-        }
-        .button-secondary {
-            background: #fef3c7;
-            color: #92400e;
-        }
-        .button-danger {
+
+        .fail {
             background: #fee2e2;
             color: #991b1b;
         }
-        .actions-row {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-top: 18px;
+
+        .neutral {
+            background: #e5e7eb;
+            color: #374151;
         }
 
-        @media (max-width: 900px) {
-            .grid { grid-template-columns: 1fr 1fr; }
+        .warning {
+            background: #fef3c7;
+            color: #92400e;
         }
-        @media (max-width: 760px) {
-            .grid { grid-template-columns: 1fr; }
-            .topbar-inner { flex-direction: column; align-items: flex-start; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #111827;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .comments {
+            white-space: pre-wrap;
+            line-height: 1.6;
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .empty {
+            color: #6b7280;
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        @media (max-width: 850px) {
+            .topbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .actions {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .top-btn {
+                width: 100%;
+                text-align: center;
+            }
         }
     </style>
 </head>
+
 <body>
-    <div class="topbar">
-        <div class="topbar-inner">
-            <div class="title">Member Profile</div>
-            <a class="back" href="/">Back to Dashboard</a>
+
+<div class="topbar">
+    <div class="topbar-inner">
+        <div class="title">{{ member.name }}</div>
+
+        <div class="actions">
+            <a class="top-btn" href="/">Back to Dashboard</a>
+
+            {% if is_admin %}
+                <a class="top-btn" href="/member/{{ member.igg_id }}/edit">Edit Player</a>
+                <a class="top-btn delete-top" href="/member/{{ member.igg_id }}/delete">Delete Player</a>
+            {% endif %}
         </div>
     </div>
+</div>
 
-    <div class="container">
-        <div class="card">
-            <h2 style="margin-top: 0;">{{ member.name }}</h2>
-            <div style="margin-bottom: 18px; display:flex; gap:10px; flex-wrap:wrap;">
-                <span class="pill">{{ member.rank or "RANK1" }}</span>
-                {% if is_admin and member.watchlist_flag %}
-                    <span class="pill watch">Watchlist</span>
-                {% endif %}
-                {% if is_admin and fail_stats.kill_consistent_fail %}
-                    <span class="pill danger">Consistent Kill Report Failures</span>
-                {% endif %}
-                {% if is_admin and fail_stats.gf_consistent_fail %}
-                    <span class="pill danger">Consistent Guild Fest Failures</span>
-                {% endif %}
-            </div>
+<div class="container">
 
-            <div class="grid">
-                {% if is_admin %}
-                <div class="item">
-                    <div class="label">User ID</div>
-                    <div class="value">{{ member.igg_id }}</div>
-                </div>
-                {% endif %}
-                <div class="item">
-                    <div class="label">Might</div>
-                    <div class="value">{{ "{:,}".format(member.might or 0) }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Kills</div>
-                    <div class="value">{{ "{:,}".format(member.kills or 0) }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Enemy Destroyed Might</div>
-                    <div class="value">{{ "{:,}".format(member.edm or 0) }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Mana</div>
-                    <div class="value">{{ member.mana or 0 }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Sigils</div>
-                    <div class="value">{{ "{:,}".format(member.sigils or 0) }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Alt Account</div>
-                    <div class="value">{{ "Yes" if member.alt_account else "No" }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Troop Comp</div>
-                    <div class="value">{{ member.troop_comp or "N/A" }}</div>
-                </div>
-                {% if is_admin %}
-                <div class="item">
-                    <div class="label">Communication</div>
-                    <div class="value">{{ member.communication_method or "N/A" }}</div>
-                </div>
-                {% if member.communication_method in ["WhatsApp", "Both"] %}
-                <div class="item">
-                    <div class="label">WhatsApp Number</div>
-                    <div class="value">{{ member.whatsapp_number or "N/A" }}</div>
-                </div>
-                {% endif %}
-                {% if member.communication_method in ["Discord", "Both"] %}
-                <div class="item">
-                    <div class="label">Discord Username</div>
-                    <div class="value">{{ member.discord_username or "N/A" }}</div>
-                </div>
-                {% endif %}
-                {% endif %}
-            </div>
-        </div>
+    <div class="grid">
+        <div>
+            <div class="card">
+                <h2>Player Details</h2>
 
-        {% if is_admin %}
-        <div class="card">
-            <h2 style="margin-top: 0;">Admin Monitoring</h2>
-
-            <div class="grid">
-                <div class="item">
-                    <div class="label">Kill Report Fails</div>
-                    <div class="value">{{ fail_stats.kill_fail }} / {{ fail_stats.kill_total }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Guild Fest Fails</div>
-                    <div class="value">{{ fail_stats.gf_fail }} / {{ fail_stats.gf_total }}</div>
-                </div>
-                <div class="item">
-                    <div class="label">Kill Report Status</div>
-                    <div class="value" style="font-size:16px;">
-                        {% if fail_stats.kill_consistent_fail %}
-                            <span class="pill danger">Consistently Failing</span>
-                        {% elif fail_stats.kill_total > 0 %}
-                            <span class="pill good">No Consistent Failure</span>
-                        {% else %}
-                            <span class="pill">No Reports Yet</span>
-                        {% endif %}
+                <div class="stat-grid">
+                    <div class="stat">
+                        <div class="label">Name</div>
+                        <div class="value">{{ member.name }}</div>
                     </div>
-                </div>
-                <div class="item">
-                    <div class="label">Guild Fest Status</div>
-                    <div class="value" style="font-size:16px;">
-                        {% if fail_stats.gf_consistent_fail %}
-                            <span class="pill danger">Consistently Failing</span>
-                        {% elif fail_stats.gf_total > 0 %}
-                            <span class="pill good">No Consistent Failure</span>
-                        {% else %}
-                            <span class="pill">No Reports Yet</span>
-                        {% endif %}
+
+                    <div class="stat">
+                        <div class="label">Rank</div>
+                        <div class="value">{{ member.rank }}</div>
                     </div>
-                </div>
-            </div>
 
-            <div class="actions-row">
-                <a class="button" href="/member/{{ member.igg_id }}/edit">Edit Player</a>
+                    <div class="stat">
+                        <div class="label">Might</div>
+                        <div class="value">{{ "{:,}".format(member.might or 0) }}</div>
+                    </div>
 
-                <form action="/member/{{ member.igg_id }}/watchlist" method="post" style="margin:0;">
-                    {% if member.watchlist_flag %}
-                        <input type="hidden" name="watchlist_flag" value="0">
-                        <button class="button-secondary button-danger" type="submit">Remove From Watchlist</button>
-                    {% else %}
-                        <input type="hidden" name="watchlist_flag" value="1">
-                        <button class="button-secondary" type="submit">Add To Watchlist</button>
+                    <div class="stat">
+                        <div class="label">Kills</div>
+                        <div class="value">{{ "{:,}".format(member.kills or 0) }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">EDM</div>
+                        <div class="value">{{ "{:,}".format(member.edm or 0) }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Kingdom Limit</div>
+                        <div class="value">
+                            {% if member.kingdom_limit %}
+                                K{{ member.kingdom_limit }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Mana</div>
+                        <div class="value">{{ member.mana or 0 }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Sigils</div>
+                        <div class="value">{{ member.sigils or 0 }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Troop Comp</div>
+                        <div class="value">{{ member.troop_comp or "N/A" }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Alt Account</div>
+                        <div class="value">
+                            {% if member.alt_account %}
+                                Yes
+                            {% else %}
+                                No
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if is_admin %}
+                    <div class="stat">
+                        <div class="label">Communication</div>
+                        <div class="value">{{ member.communication_method or "N/A" }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Watchlist</div>
+                        <div class="value">
+                            {% if member.watchlist_flag %}
+                                <span class="pill warning">Watchlist</span>
+                            {% else %}
+                                <span class="pill neutral">No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">WhatsApp</div>
+                        <div class="value">{{ member.whatsapp_number or "-" }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Discord</div>
+                        <div class="value">{{ member.discord_username or "-" }}</div>
+                    </div>
                     {% endif %}
-                </form>
+                </div>
             </div>
-        </div>
 
-        <div class="card">
-            <h2 style="margin-top: 0;">Comments</h2>
-            <div class="comments-box">{{ member.comments or "No comments saved for this player." }}</div>
-        </div>
-        {% endif %}
+            {% if is_admin %}
+            <div class="card">
+                <h2>Admin Comments</h2>
 
-        <div class="card">
-            <h2 style="margin-top: 0;">Kill Report History</h2>
-            {% if kill_history|length == 0 %}
-                <div class="empty">No kill report history for this member yet.</div>
-            {% else %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Result</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in kill_history %}
-                        <tr>
-                            <td>{{ row.generated_at }}</td>
-                            <td>
-                                {% if row.overall_pass is none %}
-                                    <span class="pill">N/A</span>
-                                {% elif row.overall_pass == 1 %}
-                                    <span class="pill good">PASS</span>
-                                {% else %}
-                                    <span class="pill danger">FAIL</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                {% if member.comments %}
+                    <div class="comments">{{ member.comments }}</div>
+                {% else %}
+                    <div class="empty">No comments saved for this player.</div>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
 
-        <div class="card">
-            <h2 style="margin-top: 0;">Guild Fest History</h2>
-            {% if guild_fest_history|length == 0 %}
-                <div class="empty">No guild fest history for this member yet.</div>
-            {% else %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Result</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in guild_fest_history %}
-                        <tr>
-                            <td>{{ row.generated_at }}</td>
-                            <td>
-                                {% if row.passed == 1 %}
-                                    <span class="pill good">PASS</span>
-                                {% else %}
-                                    <span class="pill danger">FAIL</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% endif %}
-        </div>
+        <div>
+            <div class="card">
+                <h2>Pass / Fail Summary</h2>
 
-        <div class="card">
-            <h2 style="margin-top: 0;">Name Change History</h2>
-            {% if history|length == 0 %}
-                <div class="empty">No name changes have been logged for this member.</div>
-            {% else %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Old Name</th>
-                            <th>New Name</th>
-                            <th>Changed At</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for h in history %}
-                        <tr>
-                            <td>{{ h.old_name }}</td>
-                            <td>{{ h.new_name }}</td>
-                            <td>{{ h.changed_at }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="stat-grid">
+                    <div class="stat">
+                        <div class="label">Kill Report Fails</div>
+                        <div class="value">{{ fail_stats.kill_fail }} / {{ fail_stats.kill_total }}</div>
+                    </div>
+
+                    <div class="stat">
+                        <div class="label">Guild Fest Fails</div>
+                        <div class="value">{{ fail_stats.gf_fail }} / {{ fail_stats.gf_total }}</div>
+                    </div>
+                </div>
+            </div>
+
+            {% if is_admin %}
+            <div class="card">
+                <h2>Watchlist Control</h2>
+
+                {% if member.watchlist_flag %}
+                    <form action="/member/{{ member.igg_id }}/watchlist" method="post">
+                        <input type="hidden" name="watchlist_flag" value="0">
+                        <button style="width:100%; padding:12px; border:none; border-radius:12px; background:#e5e7eb; font-weight:700; cursor:pointer;">
+                            Remove from Watchlist
+                        </button>
+                    </form>
+                {% else %}
+                    <form action="/member/{{ member.igg_id }}/watchlist" method="post">
+                        <input type="hidden" name="watchlist_flag" value="1">
+                        <button style="width:100%; padding:12px; border:none; border-radius:12px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer;">
+                            Add to Watchlist
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
     </div>
+
+    <div class="card">
+        <h2>Name Change History</h2>
+
+        {% if history|length == 0 %}
+            <div class="empty">No name changes recorded.</div>
+        {% else %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Old Name</th>
+                        <th>New Name</th>
+                        <th>Changed At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in history %}
+                    <tr>
+                        <td>{{ row.old_name }}</td>
+                        <td>{{ row.new_name }}</td>
+                        <td>{{ row.changed_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Kill Report History</h2>
+
+        {% if kill_history|length == 0 %}
+            <div class="empty">No kill report history recorded.</div>
+        {% else %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Player Name</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in kill_history %}
+                    <tr>
+                        <td>{{ row.generated_at }}</td>
+                        <td>{{ row.player_name }}</td>
+                        <td>
+                            {% if row.overall_pass == 1 %}
+                                <span class="pill pass">Pass</span>
+                            {% elif row.overall_pass == 0 %}
+                                <span class="pill fail">Fail</span>
+                            {% else %}
+                                <span class="pill neutral">No Target</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Guild Fest History</h2>
+
+        {% if guild_fest_history|length == 0 %}
+            <div class="empty">No guild fest history recorded.</div>
+        {% else %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Report</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in guild_fest_history %}
+                    <tr>
+                        <td>{{ row.generated_at }}</td>
+                        <td>{{ row.report_name }}</td>
+                        <td>
+                            {% if row.passed == 1 %}
+                                <span class="pill pass">Pass</span>
+                            {% else %}
+                                <span class="pill fail">Fail</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+
 </body>
 </html>

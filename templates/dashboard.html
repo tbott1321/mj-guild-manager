@@ -362,6 +362,17 @@
         </div>
 
         <div class="stat-card">
+            <div class="stat-title">Guild Max Kingdom</div>
+            <div class="stat-value">
+                {% if guild_max_kingdom %}
+                    K{{ guild_max_kingdom }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="stat-card">
             <div class="stat-title">Average Mana</div>
             <div class="stat-value">
                 {% if members %}
@@ -394,15 +405,11 @@
             {% endif %}
 
             {% if latest_kill_report %}
-                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary">
-                    View Latest Kill Report
-                </a>
+                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary">View Latest Kill Report</a>
             {% endif %}
 
             {% if latest_guild_fest_report %}
-                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary">
-                    View Latest Guild Fest Report
-                </a>
+                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary">View Latest Guild Fest Report</a>
             {% endif %}
         </div>
 
@@ -470,16 +477,11 @@
                     <strong>{{ item.name }}</strong><br>
 
                     Kill report fails: {{ item.kill_fail }} / {{ item.kill_total }}
-                    {% if item.kill_consistent_fail %}
-                        — consistently failing
-                    {% endif %}
-
+                    {% if item.kill_consistent_fail %} — consistently failing{% endif %}
                     <br>
 
                     Guild Fest fails: {{ item.gf_fail }} / {{ item.gf_total }}
-                    {% if item.gf_consistent_fail %}
-                        — consistently failing
-                    {% endif %}
+                    {% if item.gf_consistent_fail %} — consistently failing{% endif %}
 
                     <div class="recommend-actions">
                         <form action="/member/{{ item.igg_id }}/watchlist" method="post" style="display:inline;">
@@ -507,17 +509,11 @@
                     <strong>{{ item.name }}</strong><br>
 
                     Kill report fails: {{ item.kill_fail }} / {{ item.kill_total }}
-                    {% if item.kill_consistent_fail %}
-                        — consistently failing
-                    {% endif %}
-
+                    {% if item.kill_consistent_fail %} — consistently failing{% endif %}
                     <br>
 
                     Guild Fest fails: {{ item.gf_fail }} / {{ item.gf_total }}
-                    {% if item.gf_consistent_fail %}
-                        — consistently failing
-                    {% endif %}
-
+                    {% if item.gf_consistent_fail %} — consistently failing{% endif %}
                     <br>
 
                     <a href="/member/{{ item.igg_id }}" style="color:#312e81; font-weight:bold; text-decoration:none;">
@@ -536,7 +532,7 @@
                     type="text"
                     name="search"
                     value="{{ search }}"
-                    placeholder="Search by name, rank, might, kills, or EDM"
+                    placeholder="Search by name, rank, might, kills, EDM, or kingdom"
                 >
 
                 <button class="search-btn" type="submit">Search</button>
@@ -616,6 +612,12 @@
                 </th>
 
                 <th>
+                    <a href="/?sort_by=kingdom&sort_dir={% if sort_by == 'kingdom' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        Kingdom
+                    </a>
+                </th>
+
+                <th>
                     <a href="/?sort_by=mana&sort_dir={% if sort_by == 'mana' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
                         Mana
                     </a>
@@ -644,6 +646,13 @@
                 <td>{{ "{:,}".format(member.might or 0) }}</td>
                 <td>{{ "{:,}".format(member.kills or 0) }}</td>
                 <td>{{ "{:,}".format(member.edm or 0) }}</td>
+                <td>
+                    {% if member.kingdom_limit %}
+                        K{{ member.kingdom_limit }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
                 <td>{{ member.mana }}</td>
                 <td>{{ member.sigils }}</td>
             </tr>
@@ -666,6 +675,13 @@
             <p>Might: {{ "{:,}".format(member.might or 0) }}</p>
             <p>Kills: {{ "{:,}".format(member.kills or 0) }}</p>
             <p>EDM: {{ "{:,}".format(member.edm or 0) }}</p>
+            <p>Kingdom Limit:
+                {% if member.kingdom_limit %}
+                    K{{ member.kingdom_limit }}
+                {% else %}
+                    -
+                {% endif %}
+            </p>
             <p>Mana: {{ member.mana }}</p>
             <p>Sigils: {{ member.sigils }}</p>
         </div>

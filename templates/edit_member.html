@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJ Guild Manager - Edit Member</title>
+    <title>Edit Member</title>
+
     <style>
         * {
             box-sizing: border-box;
@@ -20,20 +21,19 @@
             background: linear-gradient(135deg, #111827, #1f2937, #312e81);
             color: white;
             padding: 22px 28px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
 
         .topbar-inner {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
-            gap: 20px;
             align-items: center;
+            gap: 20px;
         }
 
         .title {
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 700;
         }
 
@@ -48,33 +48,35 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 24px auto;
             padding: 0 20px 24px;
         }
 
         .card {
             background: white;
-            border-radius: 20px;
+            border-radius: 18px;
             padding: 24px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            box-shadow: 0 10px 24px rgba(15,23,42,.06);
         }
 
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
         }
 
         label {
             display: block;
-            font-size: 14px;
-            color: #374151;
-            margin-bottom: 8px;
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 7px;
             font-weight: 600;
         }
 
-        input, textarea, select {
+        input,
+        select,
+        textarea {
             width: 100%;
             padding: 12px 14px;
             border-radius: 12px;
@@ -84,7 +86,7 @@
         }
 
         textarea {
-            min-height: 140px;
+            min-height: 150px;
             resize: vertical;
         }
 
@@ -92,204 +94,191 @@
             grid-column: 1 / -1;
         }
 
-        .readonly {
-            background: #f3f4f6;
-        }
-
         .checkbox-row {
             display: flex;
-            align-items: center;
             gap: 10px;
-            padding-top: 32px;
+            align-items: center;
+            padding-top: 30px;
         }
 
         .checkbox-row input {
             width: auto;
-            margin: 0;
-        }
-
-        .comm-field {
-            display: none;
         }
 
         .actions {
-            margin-top: 20px;
             display: flex;
-            gap: 12px;
             flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 22px;
         }
 
-        .button, .link-button {
-            display: inline-block;
-            text-decoration: none;
+        button,
+        .button {
             border: none;
+            text-decoration: none;
             border-radius: 12px;
             padding: 12px 16px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
+            display: inline-block;
         }
 
-        .button {
+        .save {
             background: linear-gradient(135deg, #6366f1, #7c3aed);
             color: white;
         }
 
-        .link-button {
-            background: #eef2ff;
-            color: #4338ca;
+        .cancel {
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .danger {
+            background: #fee2e2;
+            color: #991b1b;
         }
 
         @media (max-width: 760px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-
-            .checkbox-row {
-                padding-top: 0;
-            }
-
             .topbar-inner {
                 flex-direction: column;
                 align-items: flex-start;
             }
-        }
-    </style>
-    <script>
-        function updateEditCommFields() {
-            const method = document.getElementById("communication_method");
-            const wa = document.getElementById("whatsapp_wrap");
-            const dc = document.getElementById("discord_wrap");
-            if (!method || !wa || !dc) return;
 
-            wa.style.display = "none";
-            dc.style.display = "none";
+            .grid {
+                grid-template-columns: 1fr;
+            }
 
-            if (method.value === "WhatsApp") {
-                wa.style.display = "block";
-            } else if (method.value === "Discord") {
-                dc.style.display = "block";
-            } else if (method.value === "Both") {
-                wa.style.display = "block";
-                dc.style.display = "block";
+            .actions {
+                flex-direction: column;
+            }
+
+            button,
+            .button {
+                width: 100%;
+                text-align: center;
             }
         }
-
-        document.addEventListener("DOMContentLoaded", updateEditCommFields);
-    </script>
+    </style>
 </head>
+
 <body>
-    <div class="topbar">
-        <div class="topbar-inner">
-            <div class="title">Edit Member</div>
-            <a class="back" href="/member/{{ member.igg_id }}">Back to Profile</a>
-        </div>
+
+<div class="topbar">
+    <div class="topbar-inner">
+        <div class="title">Edit {{ member.name }}</div>
+        <a class="back" href="/member/{{ member.igg_id }}">Back to Profile</a>
     </div>
+</div>
 
-    <div class="container">
-        <div class="card">
-            <form action="/member/{{ member.igg_id }}/edit" method="post">
-                <div class="grid">
-                    <div>
-                        <label>User ID</label>
-                        <input class="readonly" value="{{ member.igg_id }}" readonly>
-                    </div>
+<div class="container">
+    <div class="card">
+        <form action="/member/{{ member.igg_id }}/edit" method="post">
 
-                    <div>
-                        <label>Player Name</label>
-                        <input name="name" value="{{ member.name }}" required>
-                    </div>
-
-                    <div>
-                        <label>Rank</label>
-                        <select name="rank" required>
-                            <option value="RANK1" {% if (member.rank or '') == 'RANK1' %}selected{% endif %}>RANK1</option>
-                            <option value="RANK2" {% if (member.rank or '') == 'RANK2' %}selected{% endif %}>RANK2</option>
-                            <option value="RANK3" {% if (member.rank or '') == 'RANK3' %}selected{% endif %}>RANK3</option>
-                            <option value="RANK4" {% if (member.rank or '') == 'RANK4' %}selected{% endif %}>RANK4</option>
-                            <option value="RANK5" {% if (member.rank or '') == 'RANK5' %}selected{% endif %}>RANK5</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Might</label>
-                        <input type="number" name="might" value="{{ member.might or 0 }}" required>
-                    </div>
-
-                    <div>
-                        <label>Kills</label>
-                        <input type="number" name="kills" value="{{ member.kills or 0 }}" required>
-                    </div>
-
-                    <div>
-                        <label>Enemy Destroyed Might</label>
-                        <input type="number" name="edm" value="{{ member.edm or 0 }}" required>
-                    </div>
-
-                    <div>
-                        <label>Mana</label>
-                        <select name="mana" required>
-                            <option value="0" {% if (member.mana or 0) == 0 %}selected{% endif %}>0</option>
-                            <option value="1" {% if (member.mana or 0) == 1 %}selected{% endif %}>1</option>
-                            <option value="2" {% if (member.mana or 0) == 2 %}selected{% endif %}>2</option>
-                            <option value="3" {% if (member.mana or 0) == 3 %}selected{% endif %}>3</option>
-                            <option value="4" {% if (member.mana or 0) == 4 %}selected{% endif %}>4</option>
-                            <option value="5" {% if (member.mana or 0) == 5 %}selected{% endif %}>5</option>
-                            <option value="6" {% if (member.mana or 0) == 6 %}selected{% endif %}>6</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Sigils</label>
-                        <input type="number" min="0" name="sigils" value="{{ member.sigils or 0 }}" required>
-                    </div>
-
-                    <div class="checkbox-row">
-                        <input type="checkbox" id="alt_account" name="alt_account" {% if member.alt_account %}checked{% endif %}>
-                        <label for="alt_account" style="margin: 0;">Alt Account</label>
-                    </div>
-
-                    <div>
-                        <label>Troop Comp</label>
-                        <select name="troop_comp" required>
-                            <option value="Overweight" {% if (member.troop_comp or 'N/A') == 'Overweight' %}selected{% endif %}>Overweight</option>
-                            <option value="Pass" {% if (member.troop_comp or 'N/A') == 'Pass' %}selected{% endif %}>Pass</option>
-                            <option value="Low" {% if (member.troop_comp or 'N/A') == 'Low' %}selected{% endif %}>Low</option>
-                            <option value="N/A" {% if (member.troop_comp or 'N/A') == 'N/A' %}selected{% endif %}>N/A</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Communication</label>
-                        <select id="communication_method" name="communication_method" onchange="updateEditCommFields()" required>
-                            <option value="WhatsApp" {% if (member.communication_method or 'N/A') == 'WhatsApp' %}selected{% endif %}>WhatsApp</option>
-                            <option value="Discord" {% if (member.communication_method or 'N/A') == 'Discord' %}selected{% endif %}>Discord</option>
-                            <option value="Both" {% if (member.communication_method or 'N/A') == 'Both' %}selected{% endif %}>Both</option>
-                            <option value="N/A" {% if (member.communication_method or 'N/A') == 'N/A' %}selected{% endif %}>N/A</option>
-                        </select>
-                    </div>
-
-                    <div id="whatsapp_wrap" class="comm-field">
-                        <label>WhatsApp Number</label>
-                        <input name="whatsapp_number" value="{{ member.whatsapp_number or '' }}">
-                    </div>
-
-                    <div id="discord_wrap" class="comm-field">
-                        <label>Discord Username</label>
-                        <input name="discord_username" value="{{ member.discord_username or '' }}">
-                    </div>
-
-                    <div class="full">
-                        <label>Comments</label>
-                        <textarea name="comments">{{ member.comments or '' }}</textarea>
-                    </div>
+            <div class="grid">
+                <div>
+                    <label>Name</label>
+                    <input type="text" name="name" value="{{ member.name }}" required>
                 </div>
 
-                <div class="actions">
-                    <button class="button" type="submit">Save Changes</button>
-                    <a class="link-button" href="/member/{{ member.igg_id }}">Cancel</a>
+                <div>
+                    <label>Rank</label>
+                    <select name="rank" required>
+                        <option value="RANK1" {% if member.rank == "RANK1" %}selected{% endif %}>RANK1</option>
+                        <option value="RANK2" {% if member.rank == "RANK2" %}selected{% endif %}>RANK2</option>
+                        <option value="RANK3" {% if member.rank == "RANK3" %}selected{% endif %}>RANK3</option>
+                        <option value="RANK4" {% if member.rank == "RANK4" %}selected{% endif %}>RANK4</option>
+                        <option value="RANK5" {% if member.rank == "RANK5" %}selected{% endif %}>RANK5</option>
+                    </select>
                 </div>
-            </form>
-        </div>
+
+                <div>
+                    <label>Might</label>
+                    <input type="number" name="might" value="{{ member.might or 0 }}" required>
+                </div>
+
+                <div>
+                    <label>Kills</label>
+                    <input type="number" name="kills" value="{{ member.kills or 0 }}" required>
+                </div>
+
+                <div>
+                    <label>EDM</label>
+                    <input type="number" name="edm" value="{{ member.edm or 0 }}" required>
+                </div>
+
+                <div>
+                    <label>Kingdom Limit</label>
+                    <input type="number" name="kingdom_limit" value="{{ member.kingdom_limit or 0 }}" min="0" step="1">
+                </div>
+
+                <div>
+                    <label>Mana</label>
+                    <select name="mana">
+                        <option value="0" {% if member.mana == 0 %}selected{% endif %}>0</option>
+                        <option value="1" {% if member.mana == 1 %}selected{% endif %}>1</option>
+                        <option value="2" {% if member.mana == 2 %}selected{% endif %}>2</option>
+                        <option value="3" {% if member.mana == 3 %}selected{% endif %}>3</option>
+                        <option value="4" {% if member.mana == 4 %}selected{% endif %}>4</option>
+                        <option value="5" {% if member.mana == 5 %}selected{% endif %}>5</option>
+                        <option value="6" {% if member.mana == 6 %}selected{% endif %}>6</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Sigils</label>
+                    <input type="number" name="sigils" value="{{ member.sigils or 0 }}" min="0" step="1">
+                </div>
+
+                <div>
+                    <label>Troop Comp</label>
+                    <select name="troop_comp">
+                        <option value="Overweight" {% if member.troop_comp == "Overweight" %}selected{% endif %}>Overweight</option>
+                        <option value="Pass" {% if member.troop_comp == "Pass" %}selected{% endif %}>Pass</option>
+                        <option value="Low" {% if member.troop_comp == "Low" %}selected{% endif %}>Low</option>
+                        <option value="N/A" {% if member.troop_comp == "N/A" %}selected{% endif %}>N/A</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Communication</label>
+                    <select name="communication_method">
+                        <option value="N/A" {% if member.communication_method == "N/A" %}selected{% endif %}>N/A</option>
+                        <option value="WhatsApp" {% if member.communication_method == "WhatsApp" %}selected{% endif %}>WhatsApp</option>
+                        <option value="Discord" {% if member.communication_method == "Discord" %}selected{% endif %}>Discord</option>
+                        <option value="Both" {% if member.communication_method == "Both" %}selected{% endif %}>Both</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>WhatsApp Number</label>
+                    <input type="text" name="whatsapp_number" value="{{ member.whatsapp_number or '' }}">
+                </div>
+
+                <div>
+                    <label>Discord Username</label>
+                    <input type="text" name="discord_username" value="{{ member.discord_username or '' }}">
+                </div>
+
+                <div class="checkbox-row">
+                    <input type="checkbox" name="alt_account" value="1" {% if member.alt_account %}checked{% endif %}>
+                    <label style="margin: 0;">Alt Account</label>
+                </div>
+
+                <div class="full">
+                    <label>Admin Comments</label>
+                    <textarea name="comments">{{ member.comments or '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="save" type="submit">Save Changes</button>
+                <a class="button cancel" href="/member/{{ member.igg_id }}">Cancel</a>
+                <a class="button danger" href="/member/{{ member.igg_id }}/delete">Delete Player</a>
+            </div>
+
+        </form>
     </div>
+</div>
+
 </body>
 </html>

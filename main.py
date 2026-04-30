@@ -65,6 +65,7 @@ def init_db():
             edm INTEGER,
             mana INTEGER DEFAULT 0,
             sigils INTEGER DEFAULT 0,
+            kingdom_limit INTEGER DEFAULT 0,
             comments TEXT,
             alt_account INTEGER DEFAULT 0,
             troop_comp TEXT DEFAULT 'N/A',
@@ -182,6 +183,7 @@ def init_db():
     for col, definition in {
         "mana": "INTEGER DEFAULT 0",
         "sigils": "INTEGER DEFAULT 0",
+        "kingdom_limit": "INTEGER DEFAULT 0",
         "comments": "TEXT",
         "alt_account": "INTEGER DEFAULT 0",
         "troop_comp": "TEXT DEFAULT 'N/A'",
@@ -205,6 +207,7 @@ def init_db():
     c.execute("UPDATE members SET rank = 'RANK5' WHERE rank = 'R5'")
     c.execute("UPDATE members SET mana = COALESCE(mana, 0)")
     c.execute("UPDATE members SET sigils = COALESCE(sigils, 0)")
+    c.execute("UPDATE members SET kingdom_limit = COALESCE(kingdom_limit, 0)")
     c.execute("UPDATE members SET comments = COALESCE(comments, '')")
     c.execute("UPDATE members SET alt_account = COALESCE(alt_account, 0)")
     c.execute("UPDATE members SET troop_comp = COALESCE(troop_comp, 'N/A') WHERE troop_comp IS NULL OR TRIM(troop_comp) = ''")
@@ -341,7 +344,8 @@ def get_sort_sql(sort_by, sort_dir):
         "rank": rank_sort,
         "edm": "COALESCE(edm, 0)",
         "mana": "COALESCE(mana, 0)",
-        "sigils": "COALESCE(sigils, 0)"
+        "sigils": "COALESCE(sigils, 0)",
+        "kingdom": "COALESCE(kingdom_limit, 0)"
     }
 
     sort_column = sort_map.get(sort_by, "COALESCE(might, 0)")
@@ -368,10 +372,11 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
                 OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
+                OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
             )
         """
         like_value = f"%{search.lower()}%"
-        params.extend([like_value] * 5)
+        params.extend([like_value] * 6)
 
     if rank_filter:
         sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
@@ -522,6 +527,9 @@ def dashboard(
     c.execute(sql, params)
     members = c.fetchall()
 
+    c.execute("SELECT MIN(kingdom_limit) AS guild_max_kingdom FROM members WHERE COALESCE(kingdom_limit, 0) > 0")
+    guild_max_kingdom = c.fetchone()["guild_max_kingdom"] or 0
+
     c.execute("SELECT * FROM kill_reports ORDER BY generated_at DESC LIMIT 1")
     latest_kill_report = c.fetchone()
 
@@ -559,6 +567,7 @@ def dashboard(
         "watchlist_summary": watchlist_summary,
         "watchlist_recommendations": watchlist_recommendations,
         "dashboard_insights": dashboard_insights,
+        "guild_max_kingdom": guild_max_kingdom,
         "is_admin": is_admin(request)
     })
 
@@ -598,12 +607,12 @@ def approve_pending_member(request: Request, pending_id: int):
 
     c.execute("""
         INSERT OR REPLACE INTO members
-        (igg_id, name, rank, might, kills, edm, mana, sigils, alt_account, troop_comp,
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, alt_account, troop_comp,
          communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         pending["igg_id"], pending["name"], pending["rank"], pending["might"], pending["kills"], pending["edm"],
-        0, 0, 0, "N/A", "N/A", "", "", 0, "", now, now
+        0, 0, 0, 0, "N/A", "N/A", "", "", 0, "", now, now
     ))
 
     c.execute("DELETE FROM pending_members WHERE id = ?", (pending_id,))
@@ -703,6 +712,7 @@ def edit_member(
     edm: int = Form(...),
     mana: int = Form(...),
     sigils: int = Form(...),
+    kingdom_limit: int = Form(0),
     alt_account: str | None = Form(default=None),
     troop_comp: str = Form("N/A"),
     communication_method: str = Form("N/A"),
@@ -715,6 +725,7 @@ def edit_member(
 
     mana = max(0, min(6, int(mana)))
     sigils = max(0, int(sigils))
+    kingdom_limit = max(0, int(kingdom_limit))
     alt_account_value = 1 if alt_account else 0
     communication_method, whatsapp_number, discord_username = normalise_comm_fields(communication_method, whatsapp_number, discord_username)
 
@@ -732,12 +743,12 @@ def edit_member(
 
     c.execute("""
         UPDATE members
-        SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?,
+        SET name = ?, rank = ?, might = ?, kills = ?, edm = ?, mana = ?, sigils = ?, kingdom_limit = ?,
             alt_account = ?, troop_comp = ?, communication_method = ?, whatsapp_number = ?, discord_username = ?,
             comments = ?, watchlist_flag = ?, updated_at = ?
         WHERE igg_id = ?
     """, (
-        name, rank, might, kills, edm, mana, sigils,
+        name, rank, might, kills, edm, mana, sigils, kingdom_limit,
         alt_account_value, troop_comp, communication_method, whatsapp_number, discord_username,
         comments, existing_watchlist, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id
     ))
@@ -745,6 +756,50 @@ def edit_member(
     conn.commit()
     conn.close()
     return RedirectResponse(url=f"/member/{igg_id}", status_code=302)
+
+
+@app.get("/member/{igg_id}/delete", response_class=HTMLResponse)
+def confirm_delete_member(request: Request, igg_id: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    member = conn.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,)).fetchone()
+    conn.close()
+
+    if not member:
+        return HTMLResponse("<h2>Member not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(request, "confirm_delete_member.html", {
+        "member": member,
+        "is_admin": True
+    })
+
+
+@app.post("/member/{igg_id}/delete")
+def delete_individual_member(request: Request, igg_id: str, confirm_text: str = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT name FROM members WHERE igg_id = ?", (igg_id,))
+    member = c.fetchone()
+
+    if not member:
+        conn.close()
+        return HTMLResponse("<h2>Member not found</h2>", status_code=404)
+
+    if confirm_text != member["name"]:
+        conn.close()
+        return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
+
+    c.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
+    c.execute("DELETE FROM name_history WHERE igg_id = ?", (igg_id,))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.post("/member/{igg_id}/watchlist")
