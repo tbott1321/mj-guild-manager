@@ -367,6 +367,8 @@ def get_sort_sql(sort_by, sort_dir):
 
     sort_map = {
         "name": "LOWER(COALESCE(name, ''))",
+        "user_id": "LOWER(COALESCE(igg_id, ''))",
+        "igg_id": "LOWER(COALESCE(igg_id, ''))",
         "might": "COALESCE(might, 0)",
         "kills": "COALESCE(kills, 0)",
         "rank": rank_sort,
@@ -396,6 +398,7 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
         sql += """
             AND (
                 LOWER(COALESCE(m.name, '')) LIKE ?
+                OR LOWER(COALESCE(m.igg_id, '')) LIKE ?
                 OR LOWER(COALESCE(m.rank, '')) LIKE ?
                 OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
                 OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
@@ -404,7 +407,7 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
             )
         """
         like_value = f"%{search.lower()}%"
-        params.extend([like_value] * 6)
+        params.extend([like_value] * 7)
 
     if rank_filter:
         sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
