@@ -63,24 +63,32 @@
         }
 
         .stats-box {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 20px;
         }
 
         .stat-card {
-            flex: 1;
-            min-width: 180px;
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 12px;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .stat-title {
             color: gray;
-            font-size: 14px;
+            font-size: 13px;
+            margin-bottom: 4px;
         }
 
         .stat-value {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
+            line-height: 1.2;
+            word-break: break-word;
         }
 
         .report-section h2,
