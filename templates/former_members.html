@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Former Members</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar { background: linear-gradient(135deg, #111827, #1f2937, #312e81); color: white; padding: 22px 28px; }
+        .topbar-inner { max-width: 1300px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .title { font-size: 28px; font-weight: 700; }
+        .back { text-decoration: none; color: white; background: rgba(255,255,255,0.12); padding: 10px 16px; border-radius: 12px; font-weight: 600; }
+        .container { max-width: 1300px; margin: 24px auto; padding: 0 20px 24px; }
+        .section { background: white; border-radius: 18px; padding: 22px; box-shadow: 0 10px 24px rgba(15,23,42,.06); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #111827; color: white; text-align: left; padding: 14px; }
+        td { padding: 14px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        .empty { color: #6b7280; background: #f8fafc; border-radius: 14px; padding: 16px; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn { border: none; border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+        .restore { background: #dcfce7; color: #166534; }
+        .delete { background: #fee2e2; color: #991b1b; }
+        .reason { font-weight: 700; color: #92400e; }
+        @media (max-width: 760px) {
+            .topbar-inner { flex-direction: column; align-items: flex-start; }
+            table { font-size: 13px; }
+            th, td { padding: 10px; }
+            .actions { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Former Members</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            {% if former_members|length == 0 %}
+                <div class="empty">No former members archived.</div>
+            {% else %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Rank</th>
+                            <th>Might</th>
+                            <th>Kills</th>
+                            <th>EDM</th>
+                            <th>Kingdom</th>
+                            <th>Reason</th>
+                            <th>Removed</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for member in former_members %}
+                        <tr>
+                            <td>{{ member.name }}<br><small>{{ member.igg_id }}</small></td>
+                            <td>{{ member.rank }}</td>
+                            <td>{{ "{:,}".format(member.might or 0) }}</td>
+                            <td>{{ "{:,}".format(member.kills or 0) }}</td>
+                            <td>{{ "{:,}".format(member.edm or 0) }}</td>
+                            <td>{% if member.kingdom_limit %}K{{ member.kingdom_limit }}{% else %}-{% endif %}</td>
+                            <td><span class="reason">{{ member.removal_reason }}</span></td>
+                            <td>{{ member.removed_at }}</td>
+                            <td>{{ member.removal_notes or "-" }}</td>
+                            <td>
+                                <div class="actions">
+                                    <form action="/former-members/{{ member.id }}/restore" method="post" style="margin:0;">
+                                        <button class="btn restore" type="submit">Restore</button>
+                                    </form>
+                                    <a class="btn delete" href="/former-members/{{ member.id }}/delete">Delete Forever</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

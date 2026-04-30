@@ -28,6 +28,7 @@ else:
 TABLES = [
     "members",
     "pending_members",
+    "former_members",
     "name_history",
     "guild_stat_snapshots",
     "guild_stat_snapshot_rows",
@@ -89,6 +90,33 @@ def init_db():
             edm INTEGER,
             source_filename TEXT,
             imported_at TEXT
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS former_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            igg_id TEXT,
+            name TEXT,
+            rank TEXT,
+            might INTEGER,
+            kills INTEGER,
+            edm INTEGER,
+            mana INTEGER DEFAULT 0,
+            sigils INTEGER DEFAULT 0,
+            kingdom_limit INTEGER DEFAULT 0,
+            comments TEXT,
+            alt_account INTEGER DEFAULT 0,
+            troop_comp TEXT DEFAULT 'N/A',
+            communication_method TEXT DEFAULT 'N/A',
+            whatsapp_number TEXT DEFAULT '',
+            discord_username TEXT DEFAULT '',
+            watchlist_flag INTEGER DEFAULT 0,
+            removal_reason TEXT,
+            removal_notes TEXT,
+            removed_at TEXT,
+            original_created_at TEXT,
+            original_updated_at TEXT
         )
     """)
 
@@ -507,6 +535,46 @@ def get_dashboard_insights(conn):
     }
 
 
+def get_pending_comparison(conn):
+    c = conn.cursor()
+    c.execute("""
+        SELECT
+            AVG(COALESCE(might, 0)) AS avg_might,
+            AVG(COALESCE(kills, 0)) AS avg_kills,
+            AVG(COALESCE(edm, 0)) AS avg_edm
+        FROM members
+    """)
+    averages = c.fetchone()
+    avg_might = averages["avg_might"] or 0
+    avg_kills = averages["avg_kills"] or 0
+    avg_edm = averages["avg_edm"] or 0
+
+    c.execute("SELECT * FROM pending_members ORDER BY imported_at DESC, LOWER(name) ASC")
+    pending_members = c.fetchall()
+
+    rows = []
+    for member in pending_members:
+        might = member["might"] or 0
+        kills = member["kills"] or 0
+        edm = member["edm"] or 0
+        rows.append({
+            "member": member,
+            "might_diff": might - avg_might,
+            "kills_diff": kills - avg_kills,
+            "edm_diff": edm - avg_edm,
+            "might_above": might >= avg_might if avg_might else None,
+            "kills_above": kills >= avg_kills if avg_kills else None,
+            "edm_above": edm >= avg_edm if avg_edm else None,
+        })
+
+    return {
+        "avg_might": avg_might,
+        "avg_kills": avg_kills,
+        "avg_edm": avg_edm,
+        "rows": rows,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(
     request: Request,
@@ -578,13 +646,12 @@ def pending_members_page(request: Request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT * FROM pending_members ORDER BY imported_at DESC, LOWER(name) ASC")
-    pending_members = c.fetchall()
+    pending_comparison = get_pending_comparison(conn)
     conn.close()
 
     return templates.TemplateResponse(request, "pending_members.html", {
-        "pending_members": pending_members,
+        "pending_members": [row["member"] for row in pending_comparison["rows"]],
+        "pending_comparison": pending_comparison,
         "is_admin": True
     })
 
@@ -777,13 +844,19 @@ def confirm_delete_member(request: Request, igg_id: str):
 
 
 @app.post("/member/{igg_id}/delete")
-def delete_individual_member(request: Request, igg_id: str, confirm_text: str = Form(...)):
+def archive_individual_member(
+    request: Request,
+    igg_id: str,
+    removal_reason: str = Form(...),
+    removal_notes: str = Form(""),
+    confirm_text: str = Form(...)
+):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT name FROM members WHERE igg_id = ?", (igg_id,))
+    c.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
     member = c.fetchone()
 
     if not member:
@@ -794,12 +867,126 @@ def delete_individual_member(request: Request, igg_id: str, confirm_text: str = 
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
+    removed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+        INSERT INTO former_members
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+         alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
+         watchlist_flag, removal_reason, removal_notes, removed_at, original_created_at, original_updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        member["igg_id"], member["name"], member["rank"], member["might"], member["kills"], member["edm"],
+        member["mana"], member["sigils"], member["kingdom_limit"], member["comments"],
+        member["alt_account"], member["troop_comp"], member["communication_method"], member["whatsapp_number"],
+        member["discord_username"], member["watchlist_flag"], removal_reason, removal_notes, removed_at,
+        member["created_at"], member["updated_at"]
+    ))
+
     c.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
-    c.execute("DELETE FROM name_history WHERE igg_id = ?", (igg_id,))
     conn.commit()
     conn.close()
 
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/former-members", status_code=302)
+
+
+@app.get("/former-members", response_class=HTMLResponse)
+def former_members_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members ORDER BY removed_at DESC, LOWER(name)")
+    former_members = c.fetchall()
+    conn.close()
+
+    return templates.TemplateResponse(request, "former_members.html", {
+        "former_members": former_members,
+        "is_admin": True
+    })
+
+
+@app.post("/former-members/{former_id}/restore")
+def restore_former_member(request: Request, former_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    former = c.fetchone()
+
+    if not former:
+        conn.close()
+        return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+        INSERT OR REPLACE INTO members
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+         alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
+         watchlist_flag, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        former["igg_id"], former["name"], former["rank"], former["might"], former["kills"], former["edm"],
+        former["mana"], former["sigils"], former["kingdom_limit"], former["comments"],
+        former["alt_account"], former["troop_comp"], former["communication_method"], former["whatsapp_number"],
+        former["discord_username"], former["watchlist_flag"], former["original_created_at"] or now, now
+    ))
+
+    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/former-members", status_code=302)
+
+
+@app.get("/former-members/{former_id}/delete", response_class=HTMLResponse)
+def confirm_delete_former_member(request: Request, former_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    former = c.fetchone()
+    conn.close()
+
+    if not former:
+        return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(request, "confirm_delete_former_member.html", {
+        "former": former,
+        "is_admin": True
+    })
+
+
+@app.post("/former-members/{former_id}/delete")
+def permanently_delete_former_member(request: Request, former_id: int, confirm_text: str = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    former = c.fetchone()
+
+    if not former:
+        conn.close()
+        return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
+
+    if confirm_text != former["name"]:
+        conn.close()
+        return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
+
+    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
+    c.execute("DELETE FROM name_history WHERE igg_id = ?", (former["igg_id"],))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/former-members", status_code=302)
 
 
 @app.post("/member/{igg_id}/watchlist")

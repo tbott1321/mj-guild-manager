@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delete Player</title>
+    <title>Remove Player</title>
 
     <style>
         * {
@@ -85,13 +85,20 @@
             margin-bottom: 8px;
         }
 
-        input {
+        input,
+        select,
+        textarea {
             width: 100%;
             padding: 12px 14px;
             border-radius: 12px;
             border: 1px solid #d1d5db;
             margin-bottom: 16px;
             font-size: 14px;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
         }
 
         .actions {
@@ -144,7 +151,7 @@
 
 <div class="topbar">
     <div class="topbar-inner">
-        <div class="title">Delete Player</div>
+        <div class="title">Remove Player</div>
         <a class="back" href="/member/{{ member.igg_id }}">Cancel</a>
     </div>
 </div>
@@ -152,8 +159,8 @@
 <div class="container">
     <div class="card">
         <div class="warning">
-            This will permanently delete this player from the current roster and remove their name history.
-            Existing report rows will remain for historical reports.
+            This will move the player to the Former Member Archive. Existing report rows will remain for historical reports.
+            You can restore the player later, or permanently delete them from the archive.
         </div>
 
         <div class="meta">
@@ -165,11 +172,25 @@
         </div>
 
         <form action="/member/{{ member.igg_id }}/delete" method="post">
+            <label>Reason for Removal</label>
+            <select name="removal_reason" required>
+                <option value="Left Guild">Left Guild</option>
+                <option value="Kicked">Kicked</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Failed Requirements">Failed Requirements</option>
+                <option value="Moved Guild">Moved Guild</option>
+                <option value="Alt Removed">Alt Removed</option>
+                <option value="Other">Other</option>
+            </select>
+
+            <label>Additional Notes</label>
+            <textarea name="removal_notes" placeholder="Optional notes..."></textarea>
+
             <label>Type the player name exactly to confirm:</label>
             <input name="confirm_text" required>
 
             <div class="actions">
-                <button class="danger" type="submit">Delete Player</button>
+                <button class="danger" type="submit">Move to Former Members</button>
                 <a class="button cancel" href="/member/{{ member.igg_id }}">Cancel</a>
             </div>
         </form>

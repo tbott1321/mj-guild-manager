@@ -13,7 +13,7 @@
             padding: 22px 28px;
         }
         .topbar-inner {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
@@ -31,7 +31,7 @@
             font-weight: 600;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 24px auto;
             padding: 0 20px 24px;
         }
@@ -40,7 +40,20 @@
             border-radius: 18px;
             padding: 22px;
             box-shadow: 0 10px 24px rgba(15,23,42,.06);
+            margin-bottom: 24px;
         }
+        .avg-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+        .avg-card {
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 16px;
+        }
+        .label { color: #6b7280; font-size: 13px; margin-bottom: 6px; }
+        .value { font-size: 22px; font-weight: 700; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -77,14 +90,19 @@
             display: flex;
             gap: 8px;
         }
+        .above { color: #166534; font-weight: 700; }
+        .below { color: #991b1b; font-weight: 700; }
         @media (max-width: 760px) {
             .topbar-inner {
                 flex-direction: column;
                 align-items: flex-start;
             }
+            .avg-grid { grid-template-columns: 1fr; }
             .actions {
                 flex-direction: column;
             }
+            table { font-size: 13px; }
+            th, td { padding: 10px; }
         }
     </style>
 </head>
@@ -98,7 +116,25 @@
 
     <div class="container">
         <div class="section">
-            {% if pending_members|length == 0 %}
+            <h2>Guild Averages for Comparison</h2>
+            <div class="avg-grid">
+                <div class="avg-card">
+                    <div class="label">Average Might</div>
+                    <div class="value">{{ "{:,.0f}".format(pending_comparison.avg_might or 0) }}</div>
+                </div>
+                <div class="avg-card">
+                    <div class="label">Average Kills</div>
+                    <div class="value">{{ "{:,.0f}".format(pending_comparison.avg_kills or 0) }}</div>
+                </div>
+                <div class="avg-card">
+                    <div class="label">Average EDM</div>
+                    <div class="value">{{ "{:,.0f}".format(pending_comparison.avg_edm or 0) }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            {% if pending_comparison.rows|length == 0 %}
                 <div class="empty">No pending members waiting for approval.</div>
             {% else %}
                 <table>
@@ -108,21 +144,34 @@
                             <th>User ID</th>
                             <th>Rank</th>
                             <th>Might</th>
+                            <th>vs Avg</th>
                             <th>Kills</th>
+                            <th>vs Avg</th>
                             <th>EDM</th>
+                            <th>vs Avg</th>
                             <th>Imported</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for member in pending_members %}
+                        {% for row in pending_comparison.rows %}
+                        {% set member = row.member %}
                         <tr>
                             <td>{{ member.name }}</td>
                             <td>{{ member.igg_id }}</td>
                             <td>{{ member.rank }}</td>
                             <td>{{ "{:,}".format(member.might or 0) }}</td>
+                            <td class="{% if row.might_above %}above{% else %}below{% endif %}">
+                                {{ "{:+,.0f}".format(row.might_diff or 0) }}
+                            </td>
                             <td>{{ "{:,}".format(member.kills or 0) }}</td>
+                            <td class="{% if row.kills_above %}above{% else %}below{% endif %}">
+                                {{ "{:+,.0f}".format(row.kills_diff or 0) }}
+                            </td>
                             <td>{{ "{:,}".format(member.edm or 0) }}</td>
+                            <td class="{% if row.edm_above %}above{% else %}below{% endif %}">
+                                {{ "{:+,.0f}".format(row.edm_diff or 0) }}
+                            </td>
                             <td>{{ member.imported_at }}</td>
                             <td>
                                 <div class="actions">
