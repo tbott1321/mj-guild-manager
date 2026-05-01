@@ -1,0 +1,312 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Guild Requirements</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: Segoe UI, sans-serif;
+            background: #f5f7fb;
+            margin: 0;
+            padding: 0;
+            color: #111827;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg, #1e293b, #312e81);
+            color: white;
+            padding: 20px;
+        }
+
+        .topbar h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .top-actions {
+            margin-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .btn {
+            background: white;
+            color: #312e81;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
+        }
+
+        .settings-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: end;
+        }
+
+        label {
+            font-weight: bold;
+            font-size: 13px;
+            color: #475569;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            min-width: 140px;
+        }
+
+        .save-btn {
+            background: #312e81;
+            color: white;
+            padding: 11px 18px;
+            border-radius: 8px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .summary-card {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        .summary-label {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .summary-value {
+            font-size: 26px;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        th {
+            background: #1e293b;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .pill {
+            display: inline-block;
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .section-title {
+            margin-top: 0;
+            color: #1e293b;
+        }
+
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .settings-grid {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn,
+            .save-btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            table {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <h1>Guild Requirements</h1>
+
+    <div class="top-actions">
+        <a href="/" class="btn">Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="card">
+        <h2 class="section-title">Requirement Settings</h2>
+
+        <form method="post" action="/guild-requirements/update">
+            <div class="settings-grid">
+                <div>
+                    <label>Minimum Mana</label>
+                    <input type="number" name="min_mana" min="0" step="1" value="{{ settings.min_mana }}">
+                </div>
+
+                <div>
+                    <label>Minimum Sigils</label>
+                    <input type="number" name="min_sigils" min="0" step="1" value="{{ settings.min_sigils }}">
+                </div>
+
+                <button class="save-btn" type="submit">Save Requirements</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2 class="section-title">Requirement Summary</h2>
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-label">Below Mana Requirement</div>
+                <div class="summary-value">{{ low_mana|length }}</div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-label">Below Sigil Requirement</div>
+                <div class="summary-value">{{ low_sigils|length }}</div>
+            </div>
+
+            <div class="summary-card">
+                <div class="summary-label">Failing Both</div>
+                <div class="summary-value">{{ both|length }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="section-title">Players Below Mana Minimum</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Rank</th>
+                    <th>Mana</th>
+                    <th>Sigils</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in low_mana %}
+                <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
+                    <td>{{ m.name }}</td>
+                    <td>{{ m.rank }}</td>
+                    <td>{{ m.mana }}</td>
+                    <td>{{ m.sigils }}</td>
+                    <td><span class="pill">Needs Mana</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 class="section-title">Players Below Sigil Minimum</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Rank</th>
+                    <th>Mana</th>
+                    <th>Sigils</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in low_sigils %}
+                <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
+                    <td>{{ m.name }}</td>
+                    <td>{{ m.rank }}</td>
+                    <td>{{ m.mana }}</td>
+                    <td>{{ m.sigils }}</td>
+                    <td><span class="pill">Needs Sigils</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2 class="section-title">Players Failing Both Requirements</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Rank</th>
+                    <th>Mana</th>
+                    <th>Sigils</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in both %}
+                <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
+                    <td>{{ m.name }}</td>
+                    <td>{{ m.rank }}</td>
+                    <td>{{ m.mana }}</td>
+                    <td>{{ m.sigils }}</td>
+                    <td><span class="pill">Failing Both</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+</body>
+</html>

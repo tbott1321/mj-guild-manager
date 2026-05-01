@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, Request, Form, UploadFile, File, Query
+from fastapi import FastAPI, Request, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -36,7 +36,6 @@ TABLES = [
     "kill_report_rows",
     "guild_fest_reports",
     "guild_fest_report_rows",
-    "guild_settings",
 ]
 
 
@@ -511,22 +510,6 @@ def get_watchlist_recommendations(conn):
     return recommendations
 
 
-def get_guild_settings(conn):
-    c = conn.cursor()
-
-    def get_value(key, default):
-        c.execute("SELECT setting_value FROM guild_settings WHERE setting_key = ?", (key,))
-        row = c.fetchone()
-        try:
-            return int(row["setting_value"]) if row else default
-        except (TypeError, ValueError):
-            return default
-
-    return {
-        "min_mana": get_value("min_mana", 1),
-        "min_sigils": get_value("min_sigils", 80)
-    }
-
 def get_dashboard_insights(conn):
     c = conn.cursor()
 
@@ -676,78 +659,6 @@ def dashboard(
         "is_admin": admin_view
     })
 
-
-@app.get("/guild-requirements", response_class=HTMLResponse)
-def guild_requirements_page(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    conn = get_conn()
-    c = conn.cursor()
-    settings = get_guild_settings(conn)
-
-    c.execute("""
-        SELECT * FROM members
-        WHERE COALESCE(mana, 0) < ?
-        ORDER BY COALESCE(mana, 0) ASC, LOWER(name) ASC
-    """, (settings["min_mana"],))
-    low_mana = c.fetchall()
-
-    c.execute("""
-        SELECT * FROM members
-        WHERE COALESCE(sigils, 0) < ?
-        ORDER BY COALESCE(sigils, 0) ASC, LOWER(name) ASC
-    """, (settings["min_sigils"],))
-    low_sigils = c.fetchall()
-
-    c.execute("""
-        SELECT * FROM members
-        WHERE COALESCE(mana, 0) < ?
-        AND COALESCE(sigils, 0) < ?
-        ORDER BY LOWER(name) ASC
-    """, (settings["min_mana"], settings["min_sigils"]))
-    both = c.fetchall()
-
-    conn.close()
-
-    return templates.TemplateResponse(request, "guild_requirements.html", {
-        "settings": settings,
-        "low_mana": low_mana,
-        "low_sigils": low_sigils,
-        "both": both,
-        "is_admin": True
-    })
-
-
-@app.post("/guild-requirements/update")
-def update_guild_requirements(
-    request: Request,
-    min_mana: int = Form(...),
-    min_sigils: int = Form(...)
-):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    min_mana = max(0, int(min_mana))
-    min_sigils = max(0, int(min_sigils))
-
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("""
-        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
-        VALUES (?, ?)
-    """, ("min_mana", str(min_mana)))
-
-    c.execute("""
-        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
-        VALUES (?, ?)
-    """, ("min_sigils", str(min_sigils)))
-
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url="/guild-requirements", status_code=302)
 
 @app.get("/pending-members", response_class=HTMLResponse)
 def pending_members_page(request: Request):
@@ -1731,4 +1642,3 @@ def view_guild_fest_report(request: Request, report_id: int):
         "rows": rows,
         "is_admin": is_admin(request)
     })
-
