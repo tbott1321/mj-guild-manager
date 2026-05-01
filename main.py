@@ -209,6 +209,14 @@ def init_db():
         )
     """)
 
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS guild_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT
+        )
+    """)
+
+
     for col, definition in {
         "mana": "INTEGER DEFAULT 0",
         "sigils": "INTEGER DEFAULT 0",
@@ -514,6 +522,15 @@ def get_watchlist_recommendations(conn):
 def get_guild_settings(conn):
     c = conn.cursor()
 
+    # 🔒 Ensure table ALWAYS exists (fixes Render 500 error)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS guild_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT
+        )
+    """)
+    conn.commit()
+
     def get_value(key, default):
         c.execute("SELECT setting_value FROM guild_settings WHERE setting_key = ?", (key,))
         row = c.fetchone()
@@ -526,6 +543,7 @@ def get_guild_settings(conn):
         "min_mana": get_value("min_mana", 1),
         "min_sigils": get_value("min_sigils", 80)
     }
+
 
 def get_dashboard_insights(conn):
     c = conn.cursor()
