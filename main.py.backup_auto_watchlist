@@ -541,9 +541,7 @@ def get_guild_settings(conn):
 
     return {
         "min_mana": get_value("min_mana", 1),
-        "min_sigils": get_value("min_sigils", 80),
-        "report_fail_threshold": get_value("report_fail_threshold", 2),
-        "auto_watch_requirements": get_value("auto_watch_requirements", 1)
+        "min_sigils": get_value("min_sigils", 80)
     }
 
 
@@ -697,53 +695,6 @@ def dashboard(
     })
 
 
-
-def get_auto_watchlist_candidates(conn):
-    c = conn.cursor()
-    settings = get_guild_settings(conn)
-
-    c.execute("""
-        SELECT * FROM members
-        WHERE COALESCE(watchlist_flag, 0) = 0
-        AND (
-            COALESCE(mana, 0) < ?
-            OR COALESCE(sigils, 0) < ?
-        )
-        ORDER BY LOWER(name)
-    """, (settings["min_mana"], settings["min_sigils"]))
-    requirement_failures = c.fetchall()
-
-    c.execute("""
-        SELECT m.*, COUNT(krr.id) AS fail_count
-        FROM members m
-        JOIN kill_report_rows krr ON krr.igg_id = m.igg_id
-        WHERE COALESCE(m.watchlist_flag, 0) = 0
-        AND krr.overall_pass = 0
-        GROUP BY m.igg_id
-        HAVING COUNT(krr.id) >= ?
-        ORDER BY fail_count DESC, LOWER(m.name)
-    """, (settings["report_fail_threshold"],))
-    kill_failures = c.fetchall()
-
-    c.execute("""
-        SELECT m.*, COUNT(gfrr.id) AS fail_count
-        FROM members m
-        JOIN guild_fest_report_rows gfrr ON LOWER(gfrr.player_name) = LOWER(m.name)
-        WHERE COALESCE(m.watchlist_flag, 0) = 0
-        AND gfrr.passed = 0
-        GROUP BY m.igg_id
-        HAVING COUNT(gfrr.id) >= ?
-        ORDER BY fail_count DESC, LOWER(m.name)
-    """, (settings["report_fail_threshold"],))
-    guild_fest_failures = c.fetchall()
-
-    return {
-        "requirement_failures": requirement_failures,
-        "kill_failures": kill_failures,
-        "guild_fest_failures": guild_fest_failures
-    }
-
-
 @app.get("/guild-requirements", response_class=HTMLResponse)
 def guild_requirements_page(request: Request):
     if not is_admin(request):
@@ -775,8 +726,6 @@ def guild_requirements_page(request: Request):
     """, (settings["min_mana"], settings["min_sigils"]))
     both = c.fetchall()
 
-    auto_watchlist = get_auto_watchlist_candidates(conn)
-
     conn.close()
 
     return templates.TemplateResponse(request, "guild_requirements.html", {
@@ -784,7 +733,6 @@ def guild_requirements_page(request: Request):
         "low_mana": low_mana,
         "low_sigils": low_sigils,
         "both": both,
-        "auto_watchlist": auto_watchlist,
         "is_admin": True
     })
 
@@ -793,17 +741,13 @@ def guild_requirements_page(request: Request):
 def update_guild_requirements(
     request: Request,
     min_mana: int = Form(...),
-    min_sigils: int = Form(...),
-    report_fail_threshold: int = Form(2),
-    auto_watch_requirements: str | None = Form(default=None)
+    min_sigils: int = Form(...)
 ):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     min_mana = max(0, int(min_mana))
     min_sigils = max(0, int(min_sigils))
-    report_fail_threshold = max(1, int(report_fail_threshold))
-    auto_watch_requirements_value = 1 if auto_watch_requirements else 0
 
     conn = get_conn()
     c = conn.cursor()
@@ -817,16 +761,6 @@ def update_guild_requirements(
         INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
         VALUES (?, ?)
     """, ("min_sigils", str(min_sigils)))
-
-    c.execute("""
-        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
-        VALUES (?, ?)
-    """, ("report_fail_threshold", str(report_fail_threshold)))
-
-    c.execute("""
-        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
-        VALUES (?, ?)
-    """, ("auto_watch_requirements", str(auto_watch_requirements_value)))
 
     conn.commit()
     conn.close()

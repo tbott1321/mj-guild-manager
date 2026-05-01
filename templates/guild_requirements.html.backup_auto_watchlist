@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <title>Guild Requirements</title>
@@ -77,17 +77,6 @@
             min-width: 140px;
         }
 
-        .checkbox-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding-bottom: 10px;
-        }
-
-        .checkbox-row input {
-            min-width: auto;
-        }
-
         .save-btn {
             background: #312e81;
             color: white;
@@ -155,25 +144,9 @@
             font-weight: bold;
         }
 
-        .pill-warning {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
         .section-title {
             margin-top: 0;
             color: #1e293b;
-        }
-
-        .mini-btn {
-            background: #312e81;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: none;
-            font-size: 13px;
-            font-weight: bold;
-            cursor: pointer;
         }
 
         @media (max-width: 768px) {
@@ -226,16 +199,6 @@
                     <input type="number" name="min_sigils" min="0" step="1" value="{{ settings.min_sigils }}">
                 </div>
 
-                <div>
-                    <label>Report Fail Threshold</label>
-                    <input type="number" name="report_fail_threshold" min="1" step="1" value="{{ settings.report_fail_threshold }}">
-                </div>
-
-                <div class="checkbox-row">
-                    <input type="checkbox" name="auto_watch_requirements" value="1" {% if settings.auto_watch_requirements %}checked{% endif %}>
-                    <span>Include requirement failures in auto-watchlist</span>
-                </div>
-
                 <button class="save-btn" type="submit">Save Requirements</button>
             </div>
         </form>
@@ -263,86 +226,80 @@
     </div>
 
     <div class="card">
-        <h2 class="section-title">Auto Watchlist Candidates</h2>
+        <h2 class="section-title">Players Below Mana Minimum</h2>
 
-        <h3>Requirement Failures</h3>
         <table>
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Rank</th>
                     <th>Mana</th>
                     <th>Sigils</th>
-                    <th>Reason</th>
-                    <th>Action</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
-                {% for m in auto_watchlist.requirement_failures %}
-                <tr>
+                {% for m in low_mana %}
+                <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
                     <td>{{ m.name }}</td>
+                    <td>{{ m.rank }}</td>
                     <td>{{ m.mana }}</td>
                     <td>{{ m.sigils }}</td>
-                    <td><span class="pill-warning pill">Below Requirements</span></td>
-                    <td>
-                        <form action="/member/{{ m.igg_id }}/watchlist" method="post">
-                            <input type="hidden" name="watchlist_flag" value="1">
-                            <button class="mini-btn" type="submit">Add</button>
-                        </form>
-                    </td>
+                    <td><span class="pill">Needs Mana</span></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
 
-        <h3>Kill Report Failures</h3>
+    <div class="card">
+        <h2 class="section-title">Players Below Sigil Minimum</h2>
+
         <table>
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Fail Count</th>
-                    <th>Threshold</th>
-                    <th>Action</th>
+                    <th>Rank</th>
+                    <th>Mana</th>
+                    <th>Sigils</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
-                {% for m in auto_watchlist.kill_failures %}
-                <tr>
+                {% for m in low_sigils %}
+                <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
                     <td>{{ m.name }}</td>
-                    <td>{{ m.fail_count }}</td>
-                    <td>{{ settings.report_fail_threshold }}</td>
-                    <td>
-                        <form action="/member/{{ m.igg_id }}/watchlist" method="post">
-                            <input type="hidden" name="watchlist_flag" value="1">
-                            <button class="mini-btn" type="submit">Add</button>
-                        </form>
-                    </td>
+                    <td>{{ m.rank }}</td>
+                    <td>{{ m.mana }}</td>
+                    <td>{{ m.sigils }}</td>
+                    <td><span class="pill">Needs Sigils</span></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
 
-        <h3>Guild Fest Failures</h3>
+    <div class="card">
+        <h2 class="section-title">Players Failing Both Requirements</h2>
+
         <table>
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Fail Count</th>
-                    <th>Threshold</th>
-                    <th>Action</th>
+                    <th>Rank</th>
+                    <th>Mana</th>
+                    <th>Sigils</th>
+                    <th>Status</th>
                 </tr>
             </thead>
             <tbody>
-                {% for m in auto_watchlist.guild_fest_failures %}
-                <tr>
+                {% for m in both %}
+                <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
                     <td>{{ m.name }}</td>
-                    <td>{{ m.fail_count }}</td>
-                    <td>{{ settings.report_fail_threshold }}</td>
-                    <td>
-                        <form action="/member/{{ m.igg_id }}/watchlist" method="post">
-                            <input type="hidden" name="watchlist_flag" value="1">
-                            <button class="mini-btn" type="submit">Add</button>
-                        </form>
-                    </td>
+                    <td>{{ m.rank }}</td>
+                    <td>{{ m.mana }}</td>
+                    <td>{{ m.sigils }}</td>
+                    <td><span class="pill">Failing Both</span></td>
                 </tr>
                 {% endfor %}
             </tbody>
