@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>MJ Guild Manager</title>
@@ -600,6 +600,16 @@
                     <option value="Low" {% if troop_comp_filter == "Low" %}selected{% endif %}>Low</option>
                     <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
                 </select>
+
+                {% if is_admin %}
+                <select name="communication_filter">
+                    <option value="">All Communication</option>
+                    <option value="WhatsApp" {% if communication_filter == "WhatsApp" %}selected{% endif %}>WhatsApp</option>
+                    <option value="Discord" {% if communication_filter == "Discord" %}selected{% endif %}>Discord</option>
+                    <option value="Both" {% if communication_filter == "Both" %}selected{% endif %}>Both</option>
+                    <option value="N/A" {% if communication_filter == "N/A" %}selected{% endif %}>N/A</option>
+                </select>
+                {% endif %}
 
                 <input type="number" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
                 <input type="number" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">

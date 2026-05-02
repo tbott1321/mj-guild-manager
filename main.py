@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, Request, Form, UploadFile, File, Query
+from fastapi import FastAPI, Request, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -393,7 +393,7 @@ def get_sort_sql(sort_by, sort_dir):
     return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
-def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc", include_user_id_search=False):
+def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", communication_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc", include_user_id_search=False):
     sql = """
         SELECT m.*,
         (SELECT MAX(changed_at) FROM name_history nh WHERE nh.igg_id = m.igg_id) AS last_name_change
@@ -443,6 +443,10 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
     if troop_comp_filter:
         sql += " AND COALESCE(m.troop_comp, 'N/A') = ?"
         params.append(troop_comp_filter)
+
+    if communication_filter:
+        sql += " AND COALESCE(m.communication_method, 'N/A') = ?"
+        params.append(communication_filter)
 
     if min_mana != "":
         try:
@@ -637,6 +641,7 @@ def dashboard(
     rank_filter: str = Query(default=""),
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
+    communication_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
     min_sigils: str = Query(default=""),
     watchlist_only: str = Query(default="")
@@ -646,7 +651,7 @@ def dashboard(
 
     admin_view = is_admin(request)
     sql, params = build_members_query(
-        search, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils,
+        search, rank_filter, alt_filter, troop_comp_filter, communication_filter, min_mana, min_sigils,
         watchlist_only, sort_by, sort_dir, include_user_id_search=admin_view
     )
     c.execute(sql, params)
@@ -684,6 +689,7 @@ def dashboard(
         "rank_filter": rank_filter,
         "alt_filter": alt_filter,
         "troop_comp_filter": troop_comp_filter,
+        "communication_filter": communication_filter,
         "min_mana": min_mana,
         "min_sigils": min_sigils,
         "watchlist_only": watchlist_only,
