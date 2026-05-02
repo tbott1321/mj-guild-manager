@@ -196,6 +196,88 @@
                 font-size: 13px;
             }
         }
+    
+
+        /* UI CLEANUP PASS */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .topbar {
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+        }
+
+        .card {
+            border: 1px solid #e2e8f0;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            align-items: end;
+        }
+
+        .checkbox-row {
+            min-height: 42px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .summary-grid {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
+        .summary-card {
+            border: 1px solid #e2e8f0;
+        }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            margin-bottom: 18px;
+        }
+
+        .table-wrap table {
+            min-width: 760px;
+        }
+
+        .mini-btn,
+        .save-btn,
+        .btn {
+            transition: transform .15s ease, box-shadow .15s ease;
+        }
+
+        .mini-btn:hover,
+        .save-btn:hover,
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 14px;
+            }
+
+            .topbar {
+                padding: 16px;
+            }
+
+            .topbar h1 {
+                font-size: 24px;
+            }
+
+            .card {
+                padding: 14px;
+                border-radius: 16px;
+            }
+        }
+
     </style>
 </head>
 
@@ -266,6 +348,7 @@
         <h2 class="section-title">Auto Watchlist Candidates</h2>
 
         <h3>Requirement Failures</h3>
+        <div class="table-wrap">
         <table>
             <thead>
                 <tr>
@@ -293,8 +376,10 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
 
         <h3>Kill Report Failures</h3>
+        <div class="table-wrap">
         <table>
             <thead>
                 <tr>
@@ -320,8 +405,10 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
 
         <h3>Guild Fest Failures</h3>
+        <div class="table-wrap">
         <table>
             <thead>
                 <tr>
@@ -347,6 +434,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     </div>
 
 </div>
