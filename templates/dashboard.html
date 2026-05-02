@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <title>MJ Guild Manager</title>
@@ -363,6 +363,8 @@
         {% if is_admin %}
             <a href="/import" class="btn">Import</a>
             <a href="/pending-members" class="btn">Pending Members</a>
+            <a href="/former-members" class="btn">Former Members</a>
+            <a href="/guild-requirements" class="btn">Guild Requirements</a>
             <a href="/snapshots/create" class="btn">Manual Snapshot</a>
             <a href="/backup" class="btn">Backup / Restore</a>
             <a href="/reports/archive" class="btn">Report Archive</a>
@@ -492,12 +494,12 @@
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Low Mana (&lt;1)</div>
+                <div class="insight-label">Low Mana</div>
                 <div class="insight-value">{{ dashboard_insights.low_mana_count }}</div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Low Sigils (&lt;80)</div>
+                <div class="insight-label">Low Sigils</div>
                 <div class="insight-value">{{ dashboard_insights.low_sigils_count }}</div>
             </div>
         </div>
@@ -514,11 +516,11 @@
                     <strong>{{ item.name }}</strong><br>
 
                     Kill report fails: {{ item.kill_fail }} / {{ item.kill_total }}
-                    {% if item.kill_consistent_fail %} — consistently failing{% endif %}
+                    {% if item.kill_consistent_fail %} â€” consistently failing{% endif %}
                     <br>
 
                     Guild Fest fails: {{ item.gf_fail }} / {{ item.gf_total }}
-                    {% if item.gf_consistent_fail %} — consistently failing{% endif %}
+                    {% if item.gf_consistent_fail %} â€” consistently failing{% endif %}
 
                     <div class="recommend-actions">
                         <form action="/member/{{ item.igg_id }}/watchlist" method="post" style="display:inline;">
@@ -546,11 +548,11 @@
                     <strong>{{ item.name }}</strong><br>
 
                     Kill report fails: {{ item.kill_fail }} / {{ item.kill_total }}
-                    {% if item.kill_consistent_fail %} — consistently failing{% endif %}
+                    {% if item.kill_consistent_fail %} â€” consistently failing{% endif %}
                     <br>
 
                     Guild Fest fails: {{ item.gf_fail }} / {{ item.gf_total }}
-                    {% if item.gf_consistent_fail %} — consistently failing{% endif %}
+                    {% if item.gf_consistent_fail %} â€” consistently failing{% endif %}
                     <br>
 
                     <a href="/member/{{ item.igg_id }}" style="color:#312e81; font-weight:bold; text-decoration:none;">
@@ -569,7 +571,7 @@
                     type="text"
                     name="search"
                     value="{{ search }}"
-                    placeholder="Search by name, rank, might, kills, EDM, or kingdom"
+                    placeholder="{% if is_admin %}Search by name, User ID, rank, might, kills, EDM, or kingdom{% else %}Search by name, rank, might, kills, EDM, or kingdom{% endif %}"
                 >
 
                 <button class="search-btn" type="submit">Search</button>
@@ -599,16 +601,6 @@
                     <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
                 </select>
 
-                {% if is_admin %}
-                <select name="communication_filter">
-                    <option value="">All Communication</option>
-                    <option value="WhatsApp" {% if communication_filter == "WhatsApp" %}selected{% endif %}>WhatsApp</option>
-                    <option value="Discord" {% if communication_filter == "Discord" %}selected{% endif %}>Discord</option>
-                    <option value="Both" {% if communication_filter == "Both" %}selected{% endif %}>Both</option>
-                    <option value="N/A" {% if communication_filter == "N/A" %}selected{% endif %}>N/A</option>
-                </select>
-                {% endif %}
-
                 <input type="number" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
                 <input type="number" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
 
@@ -633,6 +625,14 @@
                         Name
                     </a>
                 </th>
+
+                {% if is_admin %}
+                <th>
+                    <a href="/?sort_by=user_id&sort_dir={% if sort_by == 'user_id' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+                        User ID
+                    </a>
+                </th>
+                {% endif %}
 
                 <th>
                     <a href="/?sort_by=rank&sort_dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -689,6 +689,10 @@
                     {% endif %}
                 </td>
 
+                {% if is_admin %}
+                <td>{{ member.igg_id }}</td>
+                {% endif %}
+
                 <td>{{ member.rank }}</td>
                 <td>{{ "{:,}".format(member.might or 0) }}</td>
                 <td>{{ "{:,}".format(member.kills or 0) }}</td>
@@ -719,6 +723,9 @@
             </h3>
 
             <p><strong>{{ member.rank }}</strong></p>
+            {% if is_admin %}
+            <p>User ID: {{ member.igg_id }}</p>
+            {% endif %}
             <p>Might: {{ "{:,}".format(member.might or 0) }}</p>
             <p>Kills: {{ "{:,}".format(member.kills or 0) }}</p>
             <p>EDM: {{ "{:,}".format(member.edm or 0) }}</p>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form, UploadFile, File, Query
+﻿from fastapi import FastAPI, Request, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -28,6 +28,7 @@ else:
 TABLES = [
     "members",
     "pending_members",
+    "former_members",
     "name_history",
     "guild_stat_snapshots",
     "guild_stat_snapshot_rows",
@@ -35,6 +36,7 @@ TABLES = [
     "kill_report_rows",
     "guild_fest_reports",
     "guild_fest_report_rows",
+    "guild_settings",
 ]
 
 
@@ -89,6 +91,33 @@ def init_db():
             edm INTEGER,
             source_filename TEXT,
             imported_at TEXT
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS former_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            igg_id TEXT,
+            name TEXT,
+            rank TEXT,
+            might INTEGER,
+            kills INTEGER,
+            edm INTEGER,
+            mana INTEGER DEFAULT 0,
+            sigils INTEGER DEFAULT 0,
+            kingdom_limit INTEGER DEFAULT 0,
+            comments TEXT,
+            alt_account INTEGER DEFAULT 0,
+            troop_comp TEXT DEFAULT 'N/A',
+            communication_method TEXT DEFAULT 'N/A',
+            whatsapp_number TEXT DEFAULT '',
+            discord_username TEXT DEFAULT '',
+            watchlist_flag INTEGER DEFAULT 0,
+            removal_reason TEXT,
+            removal_notes TEXT,
+            removed_at TEXT,
+            original_created_at TEXT,
+            original_updated_at TEXT
         )
     """)
 
@@ -179,6 +208,14 @@ def init_db():
             passed INTEGER
         )
     """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS guild_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT
+        )
+    """)
+
 
     for col, definition in {
         "mana": "INTEGER DEFAULT 0",
@@ -339,6 +376,8 @@ def get_sort_sql(sort_by, sort_dir):
 
     sort_map = {
         "name": "LOWER(COALESCE(name, ''))",
+        "user_id": "LOWER(COALESCE(igg_id, ''))",
+        "igg_id": "LOWER(COALESCE(igg_id, ''))",
         "might": "COALESCE(might, 0)",
         "kills": "COALESCE(kills, 0)",
         "rank": rank_sort,
@@ -354,7 +393,7 @@ def get_sort_sql(sort_by, sort_dir):
     return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
-def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", communication_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc"):
+def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc", include_user_id_search=False):
     sql = """
         SELECT m.*,
         (SELECT MAX(changed_at) FROM name_history nh WHERE nh.igg_id = m.igg_id) AS last_name_change
@@ -365,18 +404,32 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
 
     search = (search or "").strip()
     if search:
-        sql += """
-            AND (
-                LOWER(COALESCE(m.name, '')) LIKE ?
-                OR LOWER(COALESCE(m.rank, '')) LIKE ?
-                OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
-                OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
-                OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
-                OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
-            )
-        """
         like_value = f"%{search.lower()}%"
-        params.extend([like_value] * 6)
+        if include_user_id_search:
+            sql += """
+                AND (
+                    LOWER(COALESCE(m.name, '')) LIKE ?
+                    OR LOWER(COALESCE(m.igg_id, '')) LIKE ?
+                    OR LOWER(COALESCE(m.rank, '')) LIKE ?
+                    OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
+                )
+            """
+            params.extend([like_value] * 7)
+        else:
+            sql += """
+                AND (
+                    LOWER(COALESCE(m.name, '')) LIKE ?
+                    OR LOWER(COALESCE(m.rank, '')) LIKE ?
+                    OR CAST(COALESCE(m.might, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kills, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.edm, 0) AS TEXT) LIKE ?
+                    OR CAST(COALESCE(m.kingdom_limit, 0) AS TEXT) LIKE ?
+                )
+            """
+            params.extend([like_value] * 6)
 
     if rank_filter:
         sql += " AND UPPER(COALESCE(m.rank, '')) = ?"
@@ -390,10 +443,6 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
     if troop_comp_filter:
         sql += " AND COALESCE(m.troop_comp, 'N/A') = ?"
         params.append(troop_comp_filter)
-
-    if communication_filter:
-        sql += " AND COALESCE(m.communication_method, 'N/A') = ?"
-        params.append(communication_filter)
 
     if min_mana != "":
         try:
@@ -470,6 +519,34 @@ def get_watchlist_recommendations(conn):
     return recommendations
 
 
+def get_guild_settings(conn):
+    c = conn.cursor()
+
+    # 🔒 Ensure table ALWAYS exists (fixes Render 500 error)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS guild_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT
+        )
+    """)
+    conn.commit()
+
+    def get_value(key, default):
+        c.execute("SELECT setting_value FROM guild_settings WHERE setting_key = ?", (key,))
+        row = c.fetchone()
+        try:
+            return int(row["setting_value"]) if row else default
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "min_mana": get_value("min_mana", 1),
+        "min_sigils": get_value("min_sigils", 80),
+        "report_fail_threshold": get_value("report_fail_threshold", 2),
+        "auto_watch_requirements": get_value("auto_watch_requirements", 1)
+    }
+
+
 def get_dashboard_insights(conn):
     c = conn.cursor()
 
@@ -511,6 +588,46 @@ def get_dashboard_insights(conn):
     }
 
 
+def get_pending_comparison(conn):
+    c = conn.cursor()
+    c.execute("""
+        SELECT
+            AVG(COALESCE(might, 0)) AS avg_might,
+            AVG(COALESCE(kills, 0)) AS avg_kills,
+            AVG(COALESCE(edm, 0)) AS avg_edm
+        FROM members
+    """)
+    averages = c.fetchone()
+    avg_might = averages["avg_might"] or 0
+    avg_kills = averages["avg_kills"] or 0
+    avg_edm = averages["avg_edm"] or 0
+
+    c.execute("SELECT * FROM pending_members ORDER BY imported_at DESC, LOWER(name) ASC")
+    pending_members = c.fetchall()
+
+    rows = []
+    for member in pending_members:
+        might = member["might"] or 0
+        kills = member["kills"] or 0
+        edm = member["edm"] or 0
+        rows.append({
+            "member": member,
+            "might_diff": might - avg_might,
+            "kills_diff": kills - avg_kills,
+            "edm_diff": edm - avg_edm,
+            "might_above": might >= avg_might if avg_might else None,
+            "kills_above": kills >= avg_kills if avg_kills else None,
+            "edm_above": edm >= avg_edm if avg_edm else None,
+        })
+
+    return {
+        "avg_might": avg_might,
+        "avg_kills": avg_kills,
+        "avg_edm": avg_edm,
+        "rows": rows,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(
     request: Request,
@@ -520,7 +637,6 @@ def dashboard(
     rank_filter: str = Query(default=""),
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
-    communication_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
     min_sigils: str = Query(default=""),
     watchlist_only: str = Query(default="")
@@ -528,7 +644,11 @@ def dashboard(
     conn = get_conn()
     c = conn.cursor()
 
-    sql, params = build_members_query(search, rank_filter, alt_filter, troop_comp_filter, communication_filter, min_mana, min_sigils, watchlist_only, sort_by, sort_dir)
+    admin_view = is_admin(request)
+    sql, params = build_members_query(
+        search, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils,
+        watchlist_only, sort_by, sort_dir, include_user_id_search=admin_view
+    )
     c.execute(sql, params)
     members = c.fetchall()
 
@@ -564,7 +684,6 @@ def dashboard(
         "rank_filter": rank_filter,
         "alt_filter": alt_filter,
         "troop_comp_filter": troop_comp_filter,
-        "communication_filter": communication_filter,
         "min_mana": min_mana,
         "min_sigils": min_sigils,
         "watchlist_only": watchlist_only,
@@ -574,9 +693,145 @@ def dashboard(
         "watchlist_recommendations": watchlist_recommendations,
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
-        "is_admin": is_admin(request)
+        "is_admin": admin_view
     })
 
+
+
+def get_auto_watchlist_candidates(conn):
+    c = conn.cursor()
+    settings = get_guild_settings(conn)
+
+    c.execute("""
+        SELECT * FROM members
+        WHERE COALESCE(watchlist_flag, 0) = 0
+        AND (
+            COALESCE(mana, 0) < ?
+            OR COALESCE(sigils, 0) < ?
+        )
+        ORDER BY LOWER(name)
+    """, (settings["min_mana"], settings["min_sigils"]))
+    requirement_failures = c.fetchall()
+
+    c.execute("""
+        SELECT m.*, COUNT(krr.id) AS fail_count
+        FROM members m
+        JOIN kill_report_rows krr ON krr.igg_id = m.igg_id
+        WHERE COALESCE(m.watchlist_flag, 0) = 0
+        AND krr.overall_pass = 0
+        GROUP BY m.igg_id
+        HAVING COUNT(krr.id) >= ?
+        ORDER BY fail_count DESC, LOWER(m.name)
+    """, (settings["report_fail_threshold"],))
+    kill_failures = c.fetchall()
+
+    c.execute("""
+        SELECT m.*, COUNT(gfrr.id) AS fail_count
+        FROM members m
+        JOIN guild_fest_report_rows gfrr ON LOWER(gfrr.player_name) = LOWER(m.name)
+        WHERE COALESCE(m.watchlist_flag, 0) = 0
+        AND gfrr.passed = 0
+        GROUP BY m.igg_id
+        HAVING COUNT(gfrr.id) >= ?
+        ORDER BY fail_count DESC, LOWER(m.name)
+    """, (settings["report_fail_threshold"],))
+    guild_fest_failures = c.fetchall()
+
+    return {
+        "requirement_failures": requirement_failures,
+        "kill_failures": kill_failures,
+        "guild_fest_failures": guild_fest_failures
+    }
+
+
+@app.get("/guild-requirements", response_class=HTMLResponse)
+def guild_requirements_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    settings = get_guild_settings(conn)
+
+    c.execute("""
+        SELECT * FROM members
+        WHERE COALESCE(mana, 0) < ?
+        ORDER BY COALESCE(mana, 0) ASC, LOWER(name) ASC
+    """, (settings["min_mana"],))
+    low_mana = c.fetchall()
+
+    c.execute("""
+        SELECT * FROM members
+        WHERE COALESCE(sigils, 0) < ?
+        ORDER BY COALESCE(sigils, 0) ASC, LOWER(name) ASC
+    """, (settings["min_sigils"],))
+    low_sigils = c.fetchall()
+
+    c.execute("""
+        SELECT * FROM members
+        WHERE COALESCE(mana, 0) < ?
+        AND COALESCE(sigils, 0) < ?
+        ORDER BY LOWER(name) ASC
+    """, (settings["min_mana"], settings["min_sigils"]))
+    both = c.fetchall()
+
+    auto_watchlist = get_auto_watchlist_candidates(conn)
+
+    conn.close()
+
+    return templates.TemplateResponse(request, "guild_requirements.html", {
+        "settings": settings,
+        "low_mana": low_mana,
+        "low_sigils": low_sigils,
+        "both": both,
+        "auto_watchlist": auto_watchlist,
+        "is_admin": True
+    })
+
+
+@app.post("/guild-requirements/update")
+def update_guild_requirements(
+    request: Request,
+    min_mana: int = Form(...),
+    min_sigils: int = Form(...),
+    report_fail_threshold: int = Form(2),
+    auto_watch_requirements: str | None = Form(default=None)
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    min_mana = max(0, int(min_mana))
+    min_sigils = max(0, int(min_sigils))
+    report_fail_threshold = max(1, int(report_fail_threshold))
+    auto_watch_requirements_value = 1 if auto_watch_requirements else 0
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("""
+        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
+        VALUES (?, ?)
+    """, ("min_mana", str(min_mana)))
+
+    c.execute("""
+        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
+        VALUES (?, ?)
+    """, ("min_sigils", str(min_sigils)))
+
+    c.execute("""
+        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
+        VALUES (?, ?)
+    """, ("report_fail_threshold", str(report_fail_threshold)))
+
+    c.execute("""
+        INSERT OR REPLACE INTO guild_settings (setting_key, setting_value)
+        VALUES (?, ?)
+    """, ("auto_watch_requirements", str(auto_watch_requirements_value)))
+
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/guild-requirements", status_code=302)
 
 @app.get("/pending-members", response_class=HTMLResponse)
 def pending_members_page(request: Request):
@@ -584,13 +839,12 @@ def pending_members_page(request: Request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT * FROM pending_members ORDER BY imported_at DESC, LOWER(name) ASC")
-    pending_members = c.fetchall()
+    pending_comparison = get_pending_comparison(conn)
     conn.close()
 
     return templates.TemplateResponse(request, "pending_members.html", {
-        "pending_members": pending_members,
+        "pending_members": [row["member"] for row in pending_comparison["rows"]],
+        "pending_comparison": pending_comparison,
         "is_admin": True
     })
 
@@ -783,13 +1037,19 @@ def confirm_delete_member(request: Request, igg_id: str):
 
 
 @app.post("/member/{igg_id}/delete")
-def delete_individual_member(request: Request, igg_id: str, confirm_text: str = Form(...)):
+def archive_individual_member(
+    request: Request,
+    igg_id: str,
+    removal_reason: str = Form(...),
+    removal_notes: str = Form(""),
+    confirm_text: str = Form(...)
+):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT name FROM members WHERE igg_id = ?", (igg_id,))
+    c.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
     member = c.fetchone()
 
     if not member:
@@ -800,12 +1060,126 @@ def delete_individual_member(request: Request, igg_id: str, confirm_text: str = 
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
+    removed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+        INSERT INTO former_members
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+         alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
+         watchlist_flag, removal_reason, removal_notes, removed_at, original_created_at, original_updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        member["igg_id"], member["name"], member["rank"], member["might"], member["kills"], member["edm"],
+        member["mana"], member["sigils"], member["kingdom_limit"], member["comments"],
+        member["alt_account"], member["troop_comp"], member["communication_method"], member["whatsapp_number"],
+        member["discord_username"], member["watchlist_flag"], removal_reason, removal_notes, removed_at,
+        member["created_at"], member["updated_at"]
+    ))
+
     c.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
-    c.execute("DELETE FROM name_history WHERE igg_id = ?", (igg_id,))
     conn.commit()
     conn.close()
 
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/former-members", status_code=302)
+
+
+@app.get("/former-members", response_class=HTMLResponse)
+def former_members_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members ORDER BY removed_at DESC, LOWER(name)")
+    former_members = c.fetchall()
+    conn.close()
+
+    return templates.TemplateResponse(request, "former_members.html", {
+        "former_members": former_members,
+        "is_admin": True
+    })
+
+
+@app.post("/former-members/{former_id}/restore")
+def restore_former_member(request: Request, former_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    former = c.fetchone()
+
+    if not former:
+        conn.close()
+        return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+        INSERT OR REPLACE INTO members
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+         alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
+         watchlist_flag, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        former["igg_id"], former["name"], former["rank"], former["might"], former["kills"], former["edm"],
+        former["mana"], former["sigils"], former["kingdom_limit"], former["comments"],
+        former["alt_account"], former["troop_comp"], former["communication_method"], former["whatsapp_number"],
+        former["discord_username"], former["watchlist_flag"], former["original_created_at"] or now, now
+    ))
+
+    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/former-members", status_code=302)
+
+
+@app.get("/former-members/{former_id}/delete", response_class=HTMLResponse)
+def confirm_delete_former_member(request: Request, former_id: int):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    former = c.fetchone()
+    conn.close()
+
+    if not former:
+        return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
+
+    return templates.TemplateResponse(request, "confirm_delete_former_member.html", {
+        "former": former,
+        "is_admin": True
+    })
+
+
+@app.post("/former-members/{former_id}/delete")
+def permanently_delete_former_member(request: Request, former_id: int, confirm_text: str = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    former = c.fetchone()
+
+    if not former:
+        conn.close()
+        return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
+
+    if confirm_text != former["name"]:
+        conn.close()
+        return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
+
+    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
+    c.execute("DELETE FROM name_history WHERE igg_id = ?", (former["igg_id"],))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url="/former-members", status_code=302)
 
 
 @app.post("/member/{igg_id}/watchlist")
@@ -1441,3 +1815,4 @@ def view_guild_fest_report(request: Request, report_id: int):
         "rows": rows,
         "is_admin": is_admin(request)
     })
+
