@@ -263,7 +263,7 @@
     </div>
 
     <div class="card">
-        <h2 class="section-title">Players Below Minimum Mana</h2>
+        <h2 class="section-title">Players Below Minimum Mana Only</h2>
 
         {% if low_mana|length == 0 %}
             <div style="color:#6b7280; background:#f8fafc; padding:14px; border-radius:12px;">
@@ -284,14 +284,16 @@
                 </thead>
                 <tbody>
                     {% for m in low_mana %}
+                    {% if m.sigils >= settings.min_sigils %}
                     <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
                         <td>{{ m.name }}</td>
                         <td>{{ m.rank }}</td>
                         <td>{{ m.mana }}</td>
                         <td>{{ settings.min_mana }}</td>
                         <td>{{ m.sigils }}</td>
-                        <td><span class="pill">Below Mana</span></td>
+                        <td><span class="pill">Below Mana Only</span></td>
                     </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -300,7 +302,7 @@
     </div>
 
     <div class="card">
-        <h2 class="section-title">Players Below Minimum Sigils</h2>
+        <h2 class="section-title">Players Below Minimum Sigils Only</h2>
 
         {% if low_sigils|length == 0 %}
             <div style="color:#6b7280; background:#f8fafc; padding:14px; border-radius:12px;">
@@ -321,14 +323,16 @@
                 </thead>
                 <tbody>
                     {% for m in low_sigils %}
+                    {% if m.mana >= settings.min_mana %}
                     <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
                         <td>{{ m.name }}</td>
                         <td>{{ m.rank }}</td>
                         <td>{{ m.mana }}</td>
                         <td>{{ m.sigils }}</td>
                         <td>{{ settings.min_sigils }}</td>
-                        <td><span class="pill">Below Sigils</span></td>
+                        <td><span class="pill">Below Sigils Only</span></td>
                     </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
