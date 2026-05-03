@@ -1939,6 +1939,10 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
     filename = (file.filename or "").lower()
     if filename.endswith(".csv"):
         df = pd.read_csv(file.file)
