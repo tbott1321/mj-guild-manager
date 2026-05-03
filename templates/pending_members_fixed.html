@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Members</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f3f4f6;
+            color: #111827;
+            overflow-x: hidden;
+        }
+
+        .topbar {
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            color: white;
+            padding: 22px 28px;
+        }
+
+        .topbar-inner {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .back {
+            text-decoration: none;
+            color: white;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1600px;
+            margin: 24px auto;
+            padding: 0 18px 24px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 10px 24px rgba(15,23,42,.06);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #111827;
+            font-size: 24px;
+        }
+
+        .avg-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .avg-card {
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 18px;
+            min-width: 0;
+        }
+
+        .label {
+            color: #6b7280;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            font-size: 24px;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1320px;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th {
+            background: #111827;
+            color: white;
+            text-align: left;
+            padding: 12px 10px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .col-name { width: 130px; }
+        .col-user { width: 120px; }
+        .col-rank { width: 90px; }
+        .col-stat { width: 145px; }
+        .col-diff { width: 145px; }
+        .col-imported { width: 120px; }
+        .col-actions { width: 150px; }
+
+        .num {
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .player-name {
+            overflow-wrap: anywhere;
+            font-weight: 600;
+        }
+
+        .imported-date {
+            line-height: 1.35;
+            white-space: normal;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 9px;
+            padding: 9px 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .approve {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .reject {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .empty {
+            color: #6b7280;
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-start;
+            flex-wrap: nowrap;
+        }
+
+        .above {
+            color: #166534;
+            font-weight: 800;
+        }
+
+        .below {
+            color: #991b1b;
+            font-weight: 800;
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                padding: 0 12px 24px;
+            }
+
+            .section {
+                padding: 16px;
+            }
+
+            .topbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .avg-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .value {
+                white-space: normal;
+                font-size: 22px;
+            }
+
+            table {
+                min-width: 1280px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="title">Pending Member Approvals</div>
+            <a class="back" href="/">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="container">
+        {% if pending_comparison is defined %}
+        <div class="section">
+            <h2>Guild Averages for Comparison</h2>
+            <div class="avg-grid">
+                <div class="avg-card">
+                    <div class="label">Average Might</div>
+                    <div class="value">{{ "{:,.0f}".format(pending_comparison.avg_might or 0) }}</div>
+                </div>
+
+                <div class="avg-card">
+                    <div class="label">Average Kills</div>
+                    <div class="value">{{ "{:,.0f}".format(pending_comparison.avg_kills or 0) }}</div>
+                </div>
+
+                <div class="avg-card">
+                    <div class="label">Average EDM</div>
+                    <div class="value">{{ "{:,.0f}".format(pending_comparison.avg_edm or 0) }}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="section">
+            {% if pending_comparison is defined %}
+                {% set pending_rows = pending_comparison.rows %}
+            {% else %}
+                {% set pending_rows = [] %}
+            {% endif %}
+
+            {% if pending_comparison is defined and pending_rows|length > 0 %}
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-name">Name</th>
+                                <th class="col-user">User ID</th>
+                                <th class="col-rank">Rank</th>
+                                <th class="col-stat">Might</th>
+                                <th class="col-diff">vs Avg</th>
+                                <th class="col-stat">Kills</th>
+                                <th class="col-diff">vs Avg</th>
+                                <th class="col-stat">EDM</th>
+                                <th class="col-diff">vs Avg</th>
+                                <th class="col-imported">Imported</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in pending_rows %}
+                            {% set member = row.member %}
+                            <tr>
+                                <td class="player-name">{{ member.name }}</td>
+                                <td class="num">{{ member.igg_id }}</td>
+                                <td>{{ member.rank }}</td>
+                                <td class="num">{{ "{:,}".format(member.might or 0) }}</td>
+                                <td class="num {% if row.might_above %}above{% else %}below{% endif %}">{{ "{:+,.0f}".format(row.might_diff or 0) }}</td>
+                                <td class="num">{{ "{:,}".format(member.kills or 0) }}</td>
+                                <td class="num {% if row.kills_above %}above{% else %}below{% endif %}">{{ "{:+,.0f}".format(row.kills_diff or 0) }}</td>
+                                <td class="num">{{ "{:,}".format(member.edm or 0) }}</td>
+                                <td class="num {% if row.edm_above %}above{% else %}below{% endif %}">{{ "{:+,.0f}".format(row.edm_diff or 0) }}</td>
+                                <td class="imported-date">{{ member.imported_at }}</td>
+                                <td>
+                                    <div class="actions">
+                                        <form action="/pending-members/{{ member.id }}/approve" method="post" style="margin:0;">
+                                            <button class="btn approve" type="submit">Approve</button>
+                                        </form>
+                                        <form action="/pending-members/{{ member.id }}/reject" method="post" style="margin:0;">
+                                            <button class="btn reject" type="submit">Reject</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% elif pending_members|length > 0 %}
+                <div class="table-wrap">
+                    <table style="min-width: 980px;">
+                        <thead>
+                            <tr>
+                                <th class="col-name">Name</th>
+                                <th class="col-user">User ID</th>
+                                <th class="col-rank">Rank</th>
+                                <th class="col-stat">Might</th>
+                                <th class="col-stat">Kills</th>
+                                <th class="col-stat">EDM</th>
+                                <th class="col-imported">Imported</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in pending_members %}
+                            <tr>
+                                <td class="player-name">{{ member.name }}</td>
+                                <td class="num">{{ member.igg_id }}</td>
+                                <td>{{ member.rank }}</td>
+                                <td class="num">{{ "{:,}".format(member.might or 0) }}</td>
+                                <td class="num">{{ "{:,}".format(member.kills or 0) }}</td>
+                                <td class="num">{{ "{:,}".format(member.edm or 0) }}</td>
+                                <td class="imported-date">{{ member.imported_at }}</td>
+                                <td>
+                                    <div class="actions">
+                                        <form action="/pending-members/{{ member.id }}/approve" method="post" style="margin:0;">
+                                            <button class="btn approve" type="submit">Approve</button>
+                                        </form>
+                                        <form action="/pending-members/{{ member.id }}/reject" method="post" style="margin:0;">
+                                            <button class="btn reject" type="submit">Reject</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty">No pending members waiting for approval.</div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>MJ Guild Manager</title>
+    <title>{{ guild_tag }} Guild Manager</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
@@ -351,242 +351,28 @@
                 grid-template-columns: 1fr;
             }
         }
-    
-
-        /* UI CLEANUP PASS */
-        :root {
-            --bg: #f5f7fb;
-            --panel: #ffffff;
-            --ink: #0f172a;
-            --muted: #64748b;
-            --line: #e5e7eb;
-            --brand: #312e81;
-            --brand-2: #4f46e5;
-            --danger: #dc2626;
-            --warn-bg: #fff7ed;
-            --warn-text: #9a3412;
-            --ok-bg: #dcfce7;
-            --ok-text: #166534;
-        }
-
-        body {
-            color: var(--ink);
-        }
-
-        .topbar {
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
-        }
-
-        .topbar h1 {
-            letter-spacing: -0.02em;
-        }
-
-        .top-actions {
-            align-items: center;
-        }
-
-        .btn,
-        .report-btn,
-        .search-btn,
-        .reset-btn,
-        .mini-btn {
-            transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
-        }
-
-        .btn:hover,
-        .report-btn:hover,
-        .search-btn:hover,
-        .reset-btn:hover,
-        .mini-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
-        }
-
-        .container {
-            max-width: 1500px;
-            margin: 0 auto;
-        }
-
-        .stats-box,
-        .report-section,
-        .search-box,
-        .watchlist-box,
-        .insights-box,
-        .recommend-box {
-            border: 1px solid rgba(226, 232, 240, 0.85);
-        }
-
-        .stats-box {
-            grid-template-columns: repeat(4, minmax(190px, 1fr));
-            overflow-x: visible;
-        }
-
-        .stat-card {
-            min-height: 92px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .stat-value {
-            font-size: clamp(20px, 1.55vw, 26px);
-            overflow-wrap: anywhere;
-        }
-
-        .insight-grid {
-            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-        }
-
-        .insight-card {
-            border: 1px solid #e2e8f0;
-        }
-
-        .search-box form {
-            display: grid;
-            gap: 12px;
-        }
-
-        .filter-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            align-items: center;
-        }
-
-        .filter-row .search-btn,
-        .filter-row .reset-btn {
-            min-height: 40px;
-        }
-
-        .search-row input,
-        .filter-row input,
-        .filter-row select {
-            min-height: 42px;
-            background: #fff;
-        }
-
-        .table-shell {
-            width: 100%;
-            overflow-x: auto;
-            border-radius: 14px;
-            box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
-            background: white;
-        }
-
-        .table-shell table {
-            box-shadow: none;
-            min-width: 980px;
-        }
-
-        th {
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            white-space: nowrap;
-        }
-
-        td {
-            vertical-align: middle;
-        }
-
-        .clickable-row td:first-child {
-            font-weight: 700;
-        }
-
-        .watch-pill {
-            vertical-align: middle;
-        }
-
-        .player-card {
-            border: 1px solid #e2e8f0;
-        }
-
-        .player-card h3 {
-            margin-top: 0;
-            margin-bottom: 8px;
-        }
-
-        .player-card p {
-            margin: 7px 0;
-            color: #334155;
-        }
-
-        @media (max-width: 1100px) {
-            .stats-box {
-                grid-template-columns: repeat(2, minmax(180px, 1fr));
-            }
-        }
-
-        @media (max-width: 768px) {
-            .topbar {
-                padding: 16px;
-            }
-
-            .topbar h1 {
-                font-size: 24px;
-            }
-
-            .top-actions {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 8px;
-            }
-
-            .container {
-                padding: 14px;
-            }
-
-            .stats-box,
-            .report-section,
-            .search-box,
-            .watchlist-box,
-            .insights-box,
-            .recommend-box {
-                padding: 14px;
-                border-radius: 16px;
-            }
-
-            .stats-box {
-                grid-template-columns: 1fr;
-            }
-
-            .stat-card {
-                min-height: auto;
-                padding: 14px;
-            }
-
-            .filter-row,
-            .search-row {
-                display: grid;
-                grid-template-columns: 1fr;
-            }
-
-            .top-actions .btn {
-                width: 100%;
-                padding: 11px 10px;
-                font-size: 13px;
-            }
-        }
-
     </style>
 </head>
 
 <body>
 
 <div class="topbar">
-    <h1>MJ Guild Manager</h1>
+    <h1>{{ guild_tag }} Guild Manager</h1>
 
     <div class="top-actions">
         {% if is_admin %}
             <a href="/import" class="btn">Import</a>
             <a href="/pending-members" class="btn">Pending Members</a>
-            <a href="/former-members" class="btn">Former Members</a>
-            <a href="/guild-requirements" class="btn">Guild Requirements</a>
             <a href="/snapshots/create" class="btn">Manual Snapshot</a>
             <a href="/backup" class="btn">Backup / Restore</a>
             <a href="/reports/archive" class="btn">Report Archive</a>
             <a href="/admin/delete-all" class="btn btn-danger">Delete All Players</a>
-            <a href="/admin/logout" class="btn">Logout</a>
+            <a href="/admin/logout" class="btn">Admin Logout</a>
+            <a href="/guild/logout" class="btn">Switch Guild</a>
         {% else %}
             <a href="/reports/archive" class="btn">Report Archive</a>
             <a href="/admin/login" class="btn">Admin Login</a>
+            <a href="/guild/logout" class="btn">Switch Guild</a>
         {% endif %}
     </div>
 </div>
@@ -708,12 +494,12 @@
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Low Mana</div>
+                <div class="insight-label">Low Mana (&lt;1)</div>
                 <div class="insight-value">{{ dashboard_insights.low_mana_count }}</div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Low Sigils</div>
+                <div class="insight-label">Low Sigils (&lt;80)</div>
                 <div class="insight-value">{{ dashboard_insights.low_sigils_count }}</div>
             </div>
         </div>
@@ -785,7 +571,7 @@
                     type="text"
                     name="search"
                     value="{{ search }}"
-                    placeholder="{% if is_admin %}Search by name, User ID, rank, might, kills, EDM, or kingdom{% else %}Search by name, rank, might, kills, EDM, or kingdom{% endif %}"
+                    placeholder="Search by name, rank, might, kills, EDM, or kingdom"
                 >
 
                 <button class="search-btn" type="submit">Search</button>
@@ -815,16 +601,6 @@
                     <option value="N/A" {% if troop_comp_filter == "N/A" %}selected{% endif %}>N/A</option>
                 </select>
 
-                {% if is_admin %}
-                <select name="communication_filter">
-                    <option value="">All Communication</option>
-                    <option value="WhatsApp" {% if communication_filter == "WhatsApp" %}selected{% endif %}>WhatsApp</option>
-                    <option value="Discord" {% if communication_filter == "Discord" %}selected{% endif %}>Discord</option>
-                    <option value="Both" {% if communication_filter == "Both" %}selected{% endif %}>Both</option>
-                    <option value="N/A" {% if communication_filter == "N/A" %}selected{% endif %}>N/A</option>
-                </select>
-                {% endif %}
-
                 <input type="number" name="min_mana" value="{{ min_mana }}" placeholder="Min Mana">
                 <input type="number" name="min_sigils" value="{{ min_sigils }}" placeholder="Min Sigils">
 
@@ -841,7 +617,6 @@
         </form>
     </div>
 
-    <div class="table-shell">
     <table>
         <thead>
             <tr>
@@ -850,14 +625,6 @@
                         Name
                     </a>
                 </th>
-
-                {% if is_admin %}
-                <th>
-                    <a href="/?sort_by=user_id&sort_dir={% if sort_by == 'user_id' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
-                        User ID
-                    </a>
-                </th>
-                {% endif %}
 
                 <th>
                     <a href="/?sort_by=rank&sort_dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -914,10 +681,6 @@
                     {% endif %}
                 </td>
 
-                {% if is_admin %}
-                <td>{{ member.igg_id }}</td>
-                {% endif %}
-
                 <td>{{ member.rank }}</td>
                 <td>{{ "{:,}".format(member.might or 0) }}</td>
                 <td>{{ "{:,}".format(member.kills or 0) }}</td>
@@ -935,7 +698,6 @@
             {% endfor %}
         </tbody>
     </table>
-    </div>
 
     <div class="mobile-card">
         {% for member in members %}
@@ -949,9 +711,6 @@
             </h3>
 
             <p><strong>{{ member.rank }}</strong></p>
-            {% if is_admin %}
-            <p>User ID: {{ member.igg_id }}</p>
-            {% endif %}
             <p>Might: {{ "{:,}".format(member.might or 0) }}</p>
             <p>Kills: {{ "{:,}".format(member.kills or 0) }}</p>
             <p>EDM: {{ "{:,}".format(member.edm or 0) }}</p>

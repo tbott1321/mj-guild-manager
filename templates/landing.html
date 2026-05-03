@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LM Guild Manager</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin:0; min-height:100vh; background:linear-gradient(135deg,#111827,#1f2937,#312e81); color:white; display:flex; align-items:center; justify-content:center; padding:24px; }
+        .wrap { width:100%; max-width:1000px; display:grid; grid-template-columns:1.15fr .85fr; gap:24px; }
+        .panel,.card { background:rgba(17,24,39,.92); border:1px solid rgba(255,255,255,.08); border-radius:24px; box-shadow:0 20px 45px rgba(0,0,0,.35); padding:34px; }
+        h1 { font-size:44px; margin:0 0 12px; letter-spacing:-.03em; }
+        p { color:#cbd5e1; line-height:1.7; }
+        .actions { display:grid; gap:14px; }
+        .btn { display:block; text-align:center; text-decoration:none; padding:15px 18px; border-radius:14px; font-weight:800; }
+        .primary { background:linear-gradient(135deg,#6366f1,#7c3aed); color:white; }
+        .secondary { background:#eef2ff; color:#4338ca; }
+        .site { color:#cbd5e1; text-align:center; display:block; margin-top:14px; font-size:13px; }
+        .feature { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:16px; margin-top:14px; }
+        @media(max-width:800px){ .wrap{grid-template-columns:1fr;} h1{font-size:34px;} }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="panel">
+            <h1>LM Guild Manager</h1>
+            <p>Run your Lords Mobile guild with cleaner rosters, reports, requirements, snapshots, watchlists, and performance tracking.</p>
+            <div class="feature"><strong>Multi-guild ready</strong><br><span style="color:#cbd5e1;">Each guild has its own secure data space and admin password.</span></div>
+            <div class="feature"><strong>Built for leadership</strong><br><span style="color:#cbd5e1;">Track requirements, reports, pending members, former members, and backups from one dashboard.</span></div>
+        </div>
+        <div class="card">
+            <h2 style="margin-top:0;">Get Started</h2>
+            <p>Log in to an existing guild or create a new guild space.</p>
+            <div class="actions">
+                <a href="/guild/login" class="btn primary">Log in to Guild</a>
+                <a href="/guild/create" class="btn secondary">Create Guild</a>
+            </div>
+            <a href="/site-admin/login" class="site">Site admin login</a>
+        </div>
+    </div>
+</body>
+</html>

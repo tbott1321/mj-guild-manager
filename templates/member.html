@@ -190,51 +190,6 @@
                 text-align: center;
             }
         }
-    
-
-        /* UI CLEANUP PASS */
-        .topbar {
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
-        }
-
-        .container {
-            max-width: 1200px;
-        }
-
-        .card {
-            border: 1px solid #e2e8f0;
-        }
-
-        .stat {
-            border: 1px solid #e2e8f0;
-        }
-
-        .top-btn {
-            transition: transform .15s ease, box-shadow .15s ease;
-        }
-
-        .top-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
-        }
-
-        table {
-            display: block;
-            overflow-x: auto;
-            border-radius: 12px;
-        }
-
-        @media (max-width: 850px) {
-            .container {
-                padding: 0 14px 18px;
-            }
-
-            .card {
-                padding: 16px;
-                border-radius: 16px;
-            }
-        }
-
     </style>
 </head>
 
@@ -267,13 +222,6 @@
                         <div class="label">Name</div>
                         <div class="value">{{ member.name }}</div>
                     </div>
-
-                    {% if is_admin %}
-                    <div class="stat">
-                        <div class="label">User ID</div>
-                        <div class="value">{{ member.igg_id }}</div>
-                    </div>
-                    {% endif %}
 
                     <div class="stat">
                         <div class="label">Rank</div>
