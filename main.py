@@ -115,10 +115,23 @@ def init_db():
             email TEXT,
             guild_password_hash TEXT,
             admin_password_hash TEXT,
+            guild_password_plain TEXT DEFAULT '',
+            admin_password_plain TEXT DEFAULT '',
+            is_disabled INTEGER DEFAULT 0,
+            disabled_reason TEXT DEFAULT '',
             created_at TEXT,
             updated_at TEXT
         )
     """)
+
+    for col, definition in {
+        "guild_password_plain": "TEXT DEFAULT ''",
+        "admin_password_plain": "TEXT DEFAULT ''",
+        "is_disabled": "INTEGER DEFAULT 0",
+        "disabled_reason": "TEXT DEFAULT ''",
+    }.items():
+        if not column_exists(conn, "guilds", col):
+            c.execute(f"ALTER TABLE guilds ADD COLUMN {col} {definition}")
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS members (
@@ -341,13 +354,17 @@ def init_db():
         default_guild_id = row["id"]
     else:
         c.execute("""
-            INSERT INTO guilds (guild_tag, email, guild_password_hash, admin_password_hash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO guilds (guild_tag, email, guild_password_hash, admin_password_hash, guild_password_plain, admin_password_plain, is_disabled, disabled_reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             "M/J",
             os.getenv("DEFAULT_MJ_EMAIL", "owner@example.com"),
             hash_password(DEFAULT_MJ_GUILD_PASSWORD),
             hash_password(DEFAULT_MJ_ADMIN_PASSWORD),
+            DEFAULT_MJ_GUILD_PASSWORD,
+            DEFAULT_MJ_ADMIN_PASSWORD,
+            0,
+            "",
             now,
             now
         ))
@@ -356,6 +373,16 @@ def init_db():
     for table in GUILD_DATA_TABLES:
         if column_exists(conn, table, "guild_id"):
             c.execute(f"UPDATE {table} SET guild_id = ? WHERE guild_id IS NULL", (default_guild_id,))
+
+
+    c.execute("""
+        UPDATE guilds
+        SET guild_password_plain = CASE WHEN guild_password_plain IS NULL OR TRIM(guild_password_plain) = '' THEN ? ELSE guild_password_plain END,
+            admin_password_plain = CASE WHEN admin_password_plain IS NULL OR TRIM(admin_password_plain) = '' THEN ? ELSE admin_password_plain END,
+            is_disabled = COALESCE(is_disabled, 0),
+            disabled_reason = COALESCE(disabled_reason, '')
+        WHERE guild_tag = ? COLLATE BINARY
+    """, (DEFAULT_MJ_GUILD_PASSWORD, DEFAULT_MJ_ADMIN_PASSWORD, "M/J"))
 
     conn.commit()
     conn.close()
@@ -778,6 +805,9 @@ def guild_login(request: Request, guild_tag: str = Form(...), guild_password: st
     conn.close()
     if not guild or not verify_password(guild_password, guild["guild_password_hash"]):
         return templates.TemplateResponse(request, "guild_login.html", {"error": "Incorrect guild tag or password."}, status_code=401)
+    if int(guild["is_disabled"] or 0) == 1:
+        reason = (guild["disabled_reason"] or "This guild has been disabled by site admin.").strip()
+        return templates.TemplateResponse(request, "guild_login.html", {"error": f"Guild is disabled. {reason}"}, status_code=403)
     request.session.clear()
     request.session["guild_id"] = guild["id"]
     request.session["guild_tag"] = guild["guild_tag"]
@@ -813,9 +843,9 @@ def create_guild(
     try:
         c = conn.cursor()
         c.execute("""
-            INSERT INTO guilds (guild_tag, email, guild_password_hash, admin_password_hash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (guild_tag, email, hash_password(guild_password), hash_password(admin_password), now, now))
+            INSERT INTO guilds (guild_tag, email, guild_password_hash, admin_password_hash, guild_password_plain, admin_password_plain, is_disabled, disabled_reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (guild_tag, email, hash_password(guild_password), hash_password(admin_password), guild_password, admin_password, 0, "", now, now))
         guild_id = c.lastrowid
         conn.commit()
     except sqlite3.IntegrityError:
@@ -878,7 +908,14 @@ def site_admin_edit_guild_page(request: Request, guild_id: int):
 
 
 @app.post("/site-admin/guild/{guild_id}")
-def site_admin_edit_guild(request: Request, guild_id: int, email: str = Form(""), guild_password: str = Form(""), admin_password: str = Form("")):
+def site_admin_edit_guild(
+    request: Request,
+    guild_id: int,
+    email: str = Form(""),
+    guild_password: str = Form(""),
+    admin_password: str = Form(""),
+    disabled_reason: str = Form("")
+):
     if not is_site_admin(request):
         return RedirectResponse(url="/site-admin/login", status_code=302)
     conn = get_conn()
@@ -887,16 +924,72 @@ def site_admin_edit_guild(request: Request, guild_id: int, email: str = Form("")
     if not guild:
         conn.close()
         return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
-    updates = ["email = ?", "updated_at = ?"]
-    values = [email.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+    updates = ["email = ?", "disabled_reason = ?", "updated_at = ?"]
+    values = [email.strip(), disabled_reason.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
     if guild_password.strip():
         updates.append("guild_password_hash = ?")
-        values.append(hash_password(guild_password))
+        values.append(hash_password(guild_password.strip()))
+        updates.append("guild_password_plain = ?")
+        values.append(guild_password.strip())
     if admin_password.strip():
         updates.append("admin_password_hash = ?")
-        values.append(hash_password(admin_password))
+        values.append(hash_password(admin_password.strip()))
+        updates.append("admin_password_plain = ?")
+        values.append(admin_password.strip())
     values.append(guild_id)
     c.execute(f"UPDATE guilds SET {', '.join(updates)} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
+
+
+
+
+@app.post("/site-admin/guild/{guild_id}/disable")
+def site_admin_disable_guild(request: Request, guild_id: int, disabled_reason: str = Form("Disabled by site admin")):
+    if not is_site_admin(request):
+        return RedirectResponse(url="/site-admin/login", status_code=302)
+    conn = get_conn()
+    conn.execute(
+        "UPDATE guilds SET is_disabled = 1, disabled_reason = ?, updated_at = ? WHERE id = ?",
+        (disabled_reason.strip() or "Disabled by site admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
+    )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
+
+
+@app.post("/site-admin/guild/{guild_id}/enable")
+def site_admin_enable_guild(request: Request, guild_id: int):
+    if not is_site_admin(request):
+        return RedirectResponse(url="/site-admin/login", status_code=302)
+    conn = get_conn()
+    conn.execute(
+        "UPDATE guilds SET is_disabled = 0, disabled_reason = '', updated_at = ? WHERE id = ?",
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
+    )
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
+
+
+@app.post("/site-admin/guild/{guild_id}/delete")
+def site_admin_delete_guild(request: Request, guild_id: int, confirm_text: str = Form(...)):
+    if not is_site_admin(request):
+        return RedirectResponse(url="/site-admin/login", status_code=302)
+    conn = get_conn()
+    c = conn.cursor()
+    guild = c.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
+    if not guild:
+        conn.close()
+        return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
+    if confirm_text != guild["guild_tag"]:
+        conn.close()
+        return HTMLResponse("<h2>Confirmation text did not match guild tag. Guild was not deleted.</h2>", status_code=400)
+    for table in reversed(GUILD_DATA_TABLES):
+        if column_exists(conn, table, "guild_id"):
+            c.execute(f"DELETE FROM {table} WHERE guild_id = ?", (guild_id,))
+    c.execute("DELETE FROM guilds WHERE id = ?", (guild_id,))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/site-admin", status_code=302)

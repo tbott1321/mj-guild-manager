@@ -1,1 +1,91 @@
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Site Admin Dashboard</title><style>*{box-sizing:border-box;font-family:Segoe UI,Arial,sans-serif}body{margin:0;background:#f3f4f6;color:#111827}.topbar{background:linear-gradient(135deg,#111827,#1f2937,#312e81);color:white;padding:22px}.container{max-width:1200px;margin:24px auto;padding:0 20px}.card{background:white;border-radius:18px;padding:22px;box-shadow:0 10px 24px rgba(15,23,42,.06)}table{width:100%;border-collapse:collapse}th{background:#111827;color:white;text-align:left;padding:12px}td{padding:12px;border-bottom:1px solid #e5e7eb}.btn{display:inline-block;text-decoration:none;background:#eef2ff;color:#4338ca;padding:8px 12px;border-radius:10px;font-weight:700}.danger{background:#fee2e2;color:#991b1b}</style></head><body><div class="topbar"><h1>Site Admin Dashboard</h1><a class="btn" href="/site-admin/logout">Logout</a></div><div class="container"><div class="card"><h2>Guilds</h2><table><thead><tr><th>Guild</th><th>Email</th><th>Created</th><th>Members</th><th>Actions</th></tr></thead><tbody>{% for g in guilds %}<tr><td><strong>{{ g.guild_tag }}</strong></td><td>{{ g.email }}</td><td>{{ g.created_at }}</td><td>{{ g.member_count }}</td><td><a class="btn" href="/site-admin/guild/{{ g.id }}">Edit</a> <a class="btn" href="/site-admin/impersonate/{{ g.id }}">Open</a></td></tr>{% endfor %}</tbody></table></div></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Admin Dashboard</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar { background: linear-gradient(135deg,#111827,#1f2937,#312e81); color:white; padding:22px 28px; box-shadow:0 12px 30px rgba(15,23,42,.16); }
+        .topbar-inner { max-width: 1300px; margin: 0 auto; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+        .container { max-width: 1300px; margin:24px auto; padding:0 20px 24px; }
+        .card { background:white; border-radius:18px; padding:22px; box-shadow:0 10px 24px rgba(15,23,42,.06); border:1px solid #e2e8f0; }
+        h1, h2 { margin-top: 0; }
+        .actions { display:flex; gap:10px; flex-wrap:wrap; }
+        .btn { display:inline-block; text-decoration:none; background:#eef2ff; color:#4338ca; padding:9px 13px; border-radius:10px; font-weight:700; border:0; cursor:pointer; }
+        .danger { background:#fee2e2; color:#991b1b; }
+        .success { background:#dcfce7; color:#166534; }
+        .disabled-pill, .active-pill { display:inline-block; padding:5px 10px; border-radius:999px; font-size:12px; font-weight:800; }
+        .disabled-pill { background:#fee2e2; color:#991b1b; }
+        .active-pill { background:#dcfce7; color:#166534; }
+        .table-wrap { overflow-x:auto; border-radius:14px; border:1px solid #e5e7eb; }
+        table { width:100%; min-width:1050px; border-collapse:collapse; }
+        th { background:#111827; color:white; text-align:left; padding:12px; white-space:nowrap; }
+        td { padding:12px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+        tr:last-child td { border-bottom:0; }
+        .muted { color:#6b7280; font-size:13px; }
+        .password-cell { font-family: Consolas, monospace; font-size: 13px; background:#f8fafc; border-radius:8px; padding:6px 8px; display:inline-block; }
+        @media (max-width:760px){ .topbar-inner{flex-direction:column;align-items:flex-start;} .actions .btn{width:100%;text-align:center;} }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div>
+                <h1>Site Admin Dashboard</h1>
+                <div class="muted" style="color:#cbd5e1;">Manage guild accounts, passwords, status and support access.</div>
+            </div>
+            <a class="btn" href="/site-admin/logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Guilds</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Guild</th>
+                            <th>Status</th>
+                            <th>Email</th>
+                            <th>Guild Password</th>
+                            <th>Admin Password</th>
+                            <th>Members</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for g in guilds %}
+                        <tr>
+                            <td><strong>{{ g.guild_tag }}</strong></td>
+                            <td>
+                                {% if g.is_disabled %}
+                                    <span class="disabled-pill">Disabled</span>
+                                    {% if g.disabled_reason %}<div class="muted">{{ g.disabled_reason }}</div>{% endif %}
+                                {% else %}
+                                    <span class="active-pill">Active</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ g.email }}</td>
+                            <td><span class="password-cell">{{ g.guild_password_plain or 'Not stored' }}</span></td>
+                            <td><span class="password-cell">{{ g.admin_password_plain or 'Not stored' }}</span></td>
+                            <td>{{ g.member_count }}</td>
+                            <td>{{ g.created_at }}</td>
+                            <td>
+                                <div class="actions">
+                                    <a class="btn" href="/site-admin/guild/{{ g.id }}">Edit</a>
+                                    <a class="btn" href="/site-admin/impersonate/{{ g.id }}">Open</a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
