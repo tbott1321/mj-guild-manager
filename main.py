@@ -783,13 +783,26 @@ def landing_or_dashboard(
     rank_filter: str = Query(default=""),
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
+    communication_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
     min_sigils: str = Query(default=""),
     watchlist_only: str = Query(default="")
 ):
     if not current_guild_id(request):
         return templates.TemplateResponse(request, "landing.html", {})
-    return dashboard_view(request, search, sort_by, sort_dir, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils, watchlist_only)
+    return dashboard_view(
+        request=request,
+        search=search,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        rank_filter=rank_filter,
+        alt_filter=alt_filter,
+        troop_comp_filter=troop_comp_filter,
+        communication_filter=communication_filter,
+        min_mana=min_mana,
+        min_sigils=min_sigils,
+        watchlist_only=watchlist_only
+    )
 
 
 @app.get("/guild/login", response_class=HTMLResponse)
