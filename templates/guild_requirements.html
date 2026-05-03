@@ -263,6 +263,119 @@
     </div>
 
     <div class="card">
+        <h2 class="section-title">Players Below Minimum Mana Only</h2>
+
+        {% if low_mana_only|length == 0 %}
+            <div style="color:#6b7280; background:#f8fafc; padding:14px; border-radius:12px;">
+                No players are below mana only.
+            </div>
+        {% else %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Rank</th>
+                        <th>Mana</th>
+                        <th>Minimum Mana</th>
+                        <th>Sigils</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in low_mana_only %}
+                    <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
+                        <td>{{ m.name }}</td>
+                        <td>{{ m.rank }}</td>
+                        <td>{{ m.mana }}</td>
+                        <td>{{ settings.min_mana }}</td>
+                        <td>{{ m.sigils }}</td>
+                        <td><span class="pill">Below Mana Only</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2 class="section-title">Players Below Minimum Sigils Only</h2>
+
+        {% if low_sigils_only|length == 0 %}
+            <div style="color:#6b7280; background:#f8fafc; padding:14px; border-radius:12px;">
+                No players are below sigils only.
+            </div>
+        {% else %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Rank</th>
+                        <th>Mana</th>
+                        <th>Sigils</th>
+                        <th>Minimum Sigils</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in low_sigils_only %}
+                    <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
+                        <td>{{ m.name }}</td>
+                        <td>{{ m.rank }}</td>
+                        <td>{{ m.mana }}</td>
+                        <td>{{ m.sigils }}</td>
+                        <td>{{ settings.min_sigils }}</td>
+                        <td><span class="pill">Below Sigils Only</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2 class="section-title">Players Failing Both Requirements</h2>
+
+        {% if both|length == 0 %}
+            <div style="color:#6b7280; background:#f8fafc; padding:14px; border-radius:12px;">
+                No players are currently failing both mana and sigil requirements.
+            </div>
+        {% else %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Rank</th>
+                        <th>Mana</th>
+                        <th>Minimum Mana</th>
+                        <th>Sigils</th>
+                        <th>Minimum Sigils</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in both %}
+                    <tr onclick="window.location='/member/{{ m.igg_id }}'" style="cursor:pointer;">
+                        <td>{{ m.name }}</td>
+                        <td>{{ m.rank }}</td>
+                        <td>{{ m.mana }}</td>
+                        <td>{{ settings.min_mana }}</td>
+                        <td>{{ m.sigils }}</td>
+                        <td>{{ settings.min_sigils }}</td>
+                        <td><span class="pill">Failing Both</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
         <h2 class="section-title">Auto Watchlist Candidates</h2>
 
         <h3>Requirement Failures</h3>

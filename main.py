@@ -1153,17 +1153,21 @@ def guild_requirements_page(request: Request):
 
     c.execute("""
         SELECT * FROM members
-        WHERE guild_id = ? AND COALESCE(mana, 0) < ?
+        WHERE guild_id = ?
+        AND COALESCE(mana, 0) < ?
+        AND COALESCE(sigils, 0) >= ?
         ORDER BY COALESCE(mana, 0) ASC, LOWER(name) ASC
-    """, (guild_id, settings["min_mana"]))
-    low_mana = c.fetchall()
+    """, (guild_id, settings["min_mana"], settings["min_sigils"]))
+    low_mana_only = c.fetchall()
 
     c.execute("""
         SELECT * FROM members
-        WHERE guild_id = ? AND COALESCE(sigils, 0) < ?
+        WHERE guild_id = ?
+        AND COALESCE(sigils, 0) < ?
+        AND COALESCE(mana, 0) >= ?
         ORDER BY COALESCE(sigils, 0) ASC, LOWER(name) ASC
-    """, (guild_id, settings["min_sigils"]))
-    low_sigils = c.fetchall()
+    """, (guild_id, settings["min_sigils"], settings["min_mana"]))
+    low_sigils_only = c.fetchall()
 
     c.execute("""
         SELECT * FROM members
@@ -1174,6 +1178,9 @@ def guild_requirements_page(request: Request):
     """, (guild_id, settings["min_mana"], settings["min_sigils"]))
     both = c.fetchall()
 
+    low_mana = low_mana_only + both
+    low_sigils = low_sigils_only + both
+
     auto_watchlist = get_auto_watchlist_candidates(conn, guild_id)
 
     conn.close()
@@ -1182,6 +1189,8 @@ def guild_requirements_page(request: Request):
         "settings": settings,
         "low_mana": low_mana,
         "low_sigils": low_sigils,
+        "low_mana_only": low_mana_only,
+        "low_sigils_only": low_sigils_only,
         "both": both,
         "auto_watchlist": auto_watchlist,
         "is_admin": True
