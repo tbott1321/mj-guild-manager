@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form, UploadFile, File, Query
+﻿from fastapi import FastAPI, Request, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -393,7 +393,7 @@ def get_sort_sql(sort_by, sort_dir):
     return f"{sort_column} {direction}, LOWER(COALESCE(name, '')) ASC"
 
 
-def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", communication_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc", include_user_id_search=False):
+def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_filter="", min_mana="", min_sigils="", watchlist_only="", sort_by="might", sort_dir="desc", include_user_id_search=False):
     sql = """
         SELECT m.*,
         (SELECT MAX(changed_at) FROM name_history nh WHERE nh.igg_id = m.igg_id) AS last_name_change
@@ -443,10 +443,6 @@ def build_members_query(search="", rank_filter="", alt_filter="", troop_comp_fil
     if troop_comp_filter:
         sql += " AND COALESCE(m.troop_comp, 'N/A') = ?"
         params.append(troop_comp_filter)
-
-    if communication_filter:
-        sql += " AND COALESCE(m.communication_method, 'N/A') = ?"
-        params.append(communication_filter)
 
     if min_mana != "":
         try:
@@ -641,7 +637,6 @@ def dashboard(
     rank_filter: str = Query(default=""),
     alt_filter: str = Query(default=""),
     troop_comp_filter: str = Query(default=""),
-    communication_filter: str = Query(default=""),
     min_mana: str = Query(default=""),
     min_sigils: str = Query(default=""),
     watchlist_only: str = Query(default="")
@@ -651,7 +646,7 @@ def dashboard(
 
     admin_view = is_admin(request)
     sql, params = build_members_query(
-        search, rank_filter, alt_filter, troop_comp_filter, communication_filter, min_mana, min_sigils,
+        search, rank_filter, alt_filter, troop_comp_filter, min_mana, min_sigils,
         watchlist_only, sort_by, sort_dir, include_user_id_search=admin_view
     )
     c.execute(sql, params)
@@ -689,7 +684,6 @@ def dashboard(
         "rank_filter": rank_filter,
         "alt_filter": alt_filter,
         "troop_comp_filter": troop_comp_filter,
-        "communication_filter": communication_filter,
         "min_mana": min_mana,
         "min_sigils": min_sigils,
         "watchlist_only": watchlist_only,
@@ -1659,7 +1653,18 @@ def create_kill_report(
 
     start_map = {row["igg_id"]: row for row in start_rows}
     end_map = {row["igg_id"]: row for row in end_rows}
-    common_ids = sorted(set(start_map.keys()) & set(end_map.keys()))
+
+    # Only include players who are currently on the active guild roster.
+    # This prevents banks, temporary accounts, old members, or rejected import rows
+    # from appearing in kill reports even if they exist in the selected snapshots.
+    c.execute("SELECT igg_id, name FROM members")
+    active_members = {
+        str(row["igg_id"]).strip(): row["name"]
+        for row in c.fetchall()
+        if row["igg_id"]
+    }
+
+    common_ids = sorted((set(start_map.keys()) & set(end_map.keys())) & set(active_members.keys()))
 
     report_rows = []
 
@@ -1680,7 +1685,7 @@ def create_kill_report(
 
         report_rows.append({
             "igg_id": igg_id,
-            "player_name": end_row["player_name"],
+            "player_name": active_members.get(igg_id) or end_row["player_name"],
             "kill_increase": kill_increase,
             "edm_increase": edm_increase,
             "edm_per_kill": edm_per_kill,
@@ -1771,7 +1776,47 @@ async def create_guild_fest_report(request: Request, report_name: str = Form(...
     conn = get_conn()
     c = conn.cursor()
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    avg_score = round(float(df["Score"].fillna(0).mean()), 2) if len(df.index) > 0 else 0
+
+    # Only include players who are currently on the active guild roster.
+    # Guild Fest sheets can include banks, temporary accounts, or non-roster entries,
+    # so filter the uploaded sheet against the active members table before saving rows.
+    c.execute("SELECT name FROM members")
+    active_names = {
+        str(row["name"]).strip().lower(): row["name"]
+        for row in c.fetchall()
+        if row["name"]
+    }
+
+    guild_fest_rows = []
+
+    for _, row in df.iterrows():
+        player_name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
+        if not player_name:
+            continue
+
+        roster_name = active_names.get(player_name.lower())
+        if not roster_name:
+            continue
+
+        completed = 0 if pd.isna(row["Completed"]) else int(float(row["Completed"]))
+        total = 0 if pd.isna(row["Total"]) else int(float(row["Total"]))
+        score = 0 if pd.isna(row["Score"]) else int(float(row["Score"]))
+        completed_bonus = "" if pd.isna(row["Completed Bonus"]) else str(row["Completed Bonus"]).strip()
+        passed = int(score >= pass_score)
+
+        guild_fest_rows.append({
+            "player_name": roster_name,
+            "score": score,
+            "completed": completed,
+            "total": total,
+            "completed_bonus": completed_bonus,
+            "passed": passed,
+        })
+
+    avg_score = round(
+        sum(row["score"] for row in guild_fest_rows) / len(guild_fest_rows),
+        2
+    ) if guild_fest_rows else 0
 
     c.execute("""
         INSERT INTO guild_fest_reports
@@ -1781,22 +1826,20 @@ async def create_guild_fest_report(request: Request, report_name: str = Form(...
 
     report_id = c.lastrowid
 
-    for _, row in df.iterrows():
-        player_name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
-        if not player_name:
-            continue
-
-        completed = 0 if pd.isna(row["Completed"]) else int(float(row["Completed"]))
-        total = 0 if pd.isna(row["Total"]) else int(float(row["Total"]))
-        score = 0 if pd.isna(row["Score"]) else int(float(row["Score"]))
-        completed_bonus = "" if pd.isna(row["Completed Bonus"]) else str(row["Completed Bonus"]).strip()
-        passed = int(score >= pass_score)
-
+    for row in guild_fest_rows:
         c.execute("""
             INSERT INTO guild_fest_report_rows
             (report_id, player_name, guild_fest_score, completed, total, completed_bonus, passed)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (report_id, player_name, score, completed, total, completed_bonus, passed))
+        """, (
+            report_id,
+            row["player_name"],
+            row["score"],
+            row["completed"],
+            row["total"],
+            row["completed_bonus"],
+            row["passed"],
+        ))
 
     conn.commit()
     conn.close()
