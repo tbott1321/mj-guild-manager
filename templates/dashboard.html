@@ -471,7 +471,38 @@
     </div>
 
     {% if is_admin %}
-    <div class="insights-box">
+    
+{% if is_admin and billing %}
+<div class="stats-box">
+    <div class="stat-card">
+        <div class="stat-title">Plan</div>
+        <div class="stat-value">{{ billing.plan }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Status</div>
+        <div class="stat-value">
+            {{ billing.status }}
+            {% if billing.manual %}
+                <span style="color:#f59e0b;">(Manual)</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Trial Ends</div>
+        <div class="stat-value">{{ billing.trial_ends_at or "N/A" }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Next Billing</div>
+        <div class="stat-value">{{ billing.current_period_end or "N/A" }}</div>
+    </div>
+</div>
+
+<div class="report-section">
+    <a href="/billing/portal" class="report-btn">Manage Billing</a>
+</div>
+{% endif %}
+
+<div class="insights-box">
         <h2>Admin Quick Insights</h2>
 
         <div class="insight-grid">

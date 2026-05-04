@@ -1294,6 +1294,22 @@ def dashboard_view(
 
     conn.close()
 
+    
+    # Billing info (admin only)
+    billing = None
+    if admin_view:
+        conn2 = get_conn()
+        guild = conn2.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
+        conn2.close()
+        if guild:
+            billing = {
+                "plan": guild["stripe_plan"] or ("Manual" if guild["manual_access"] else "None"),
+                "status": guild["subscription_status"] or ("Manual" if guild["manual_access"] else "Inactive"),
+                "trial_ends_at": guild["trial_ends_at"],
+                "current_period_end": guild["current_period_end"],
+                "manual": guild["manual_access"]
+            }
+
     return templates.TemplateResponse(request, "dashboard.html", {
         "members": members,
         "search": search,
@@ -1313,7 +1329,8 @@ def dashboard_view(
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
         "guild_tag": current_guild_tag(request),
-        "is_admin": admin_view
+        "is_admin": admin_view,
+        "billing": billing
     })
 
 
