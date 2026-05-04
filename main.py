@@ -209,7 +209,8 @@ async def guild_billing_guard(request: Request, call_next):
     )
     if path == "/" or path.startswith(exempt_prefixes):
         return await call_next(request)
-    guild_id = request.session.get("guild_id")
+    session = request.scope.get("session", {})
+    guild_id = session.get("guild_id")
     if guild_id:
         conn = get_conn()
         guild = conn.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
