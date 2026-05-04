@@ -1,5 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Create Guild</title>
-<style>*{box-sizing:border-box;font-family:"Segoe UI",Arial,sans-serif}body{margin:0;min-height:100vh;background:linear-gradient(135deg,#111827,#1f2937,#312e81);display:flex;align-items:center;justify-content:center;padding:24px}.card{width:100%;max-width:620px;background:white;border-radius:24px;padding:32px;box-shadow:0 24px 50px rgba(0,0,0,.22)}h1{margin:0 0 10px}p{color:#6b7280;line-height:1.6}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{display:block;font-size:14px;color:#374151;margin-bottom:8px;font-weight:700}input{width:100%;padding:14px;border-radius:12px;border:1px solid #d1d5db;margin-bottom:16px}.full{grid-column:1/-1}button,.btn{text-decoration:none;border:none;border-radius:12px;padding:13px 18px;font-weight:800;cursor:pointer;display:inline-block}button{background:linear-gradient(135deg,#6366f1,#7c3aed);color:white}.btn{background:#eef2ff;color:#4338ca;margin-left:8px}.error{background:#fee2e2;color:#991b1b;padding:12px;border-radius:12px;margin-bottom:16px}@media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}</style></head>
-<body><div class="card"><h1>Create Guild</h1><p>Create a secure guild workspace. Guild tags are case-sensitive and must be exactly 3 characters.</p>{% if error %}<div class="error">{{ error }}</div>{% endif %}<form method="post" action="/guild/create"><div class="grid"><div><label>Guild Tag</label><input name="guild_tag" maxlength="3" minlength="3" required></div><div><label>Owner Email</label><input type="email" name="email" required></div><div><label>Confirm Email</label><input type="email" name="confirm_email" required></div><div><label>Guild Password</label><input type="password" name="guild_password" required></div><div class="full"><label>Admin Password</label><input type="password" name="admin_password" required></div></div><button type="submit">Create Guild</button><a class="btn" href="/">Back</a></form></div></body></html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Guild</title>
+    <style>
+        *{box-sizing:border-box;font-family:"Segoe UI",Arial,sans-serif}
+        body{margin:0;min-height:100vh;background:linear-gradient(135deg,#111827,#1f2937,#312e81);display:flex;align-items:center;justify-content:center;padding:24px}
+        .card{width:100%;max-width:760px;background:white;border-radius:24px;padding:32px;box-shadow:0 24px 50px rgba(0,0,0,.22)}
+        h1{margin:0 0 10px;color:#111827}p{color:#6b7280;line-height:1.6}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        label{display:block;font-size:14px;color:#374151;margin-bottom:8px;font-weight:700}input,select{width:100%;padding:14px;border-radius:12px;border:1px solid #d1d5db;margin-bottom:16px;background:white}.full{grid-column:1/-1}
+        button,.btn{text-decoration:none;border:none;border-radius:12px;padding:13px 18px;font-weight:800;cursor:pointer;display:inline-block}button{background:linear-gradient(135deg,#6366f1,#7c3aed);color:white}.btn{background:#eef2ff;color:#4338ca;margin-left:8px}.error{background:#fee2e2;color:#991b1b;padding:12px;border-radius:12px;margin-bottom:16px}.plan-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:16px}.hint{font-size:13px;color:#64748b;margin-top:-8px;margin-bottom:16px}
+        @media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.btn,button{width:100%;text-align:center;margin:8px 0 0}}
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Create Guild</h1>
+    <p>Create a secure guild workspace. Guild tags are case-sensitive and must be exactly 3 characters.</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="post" action="/guild/create">
+        <div class="grid">
+            <div>
+                <label>Guild Tag</label>
+                <input name="guild_tag" maxlength="3" minlength="3" required>
+            </div>
+            <div>
+                <label>Billing Plan</label>
+                <select name="billing_plan" required>
+                    <option value="monthly">Monthly — £9.99 / month</option>
+                    <option value="six_month">6 Months — £49.99 / 6 months</option>
+                    <option value="twelve_month">12 Months — £84.99 / 12 months</option>
+                </select>
+            </div>
+            <div>
+                <label>Owner Email</label>
+                <input type="email" name="email" required>
+            </div>
+            <div>
+                <label>Confirm Email</label>
+                <input type="email" name="confirm_email" required>
+            </div>
+            <div>
+                <label>Guild Password</label>
+                <input type="password" name="guild_password" required>
+            </div>
+            <div>
+                <label>Admin Password</label>
+                <input type="password" name="admin_password" required>
+            </div>
+        </div>
+        <div class="plan-box">
+            <strong>14-day free trial included.</strong><br>
+            <span style="color:#64748b;">After creating the guild, you’ll be sent to Stripe Checkout to start the trial. The guild unlocks after Stripe confirms checkout.</span>
+        </div>
+        <button type="submit">Create Guild & Start Trial</button>
+        <a class="btn" href="/">Back</a>
+    </form>
+</div>
+</body>
+</html>

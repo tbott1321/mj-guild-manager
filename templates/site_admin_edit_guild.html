@@ -8,11 +8,11 @@
         * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
         body { margin:0; background:#f3f4f6; color:#111827; }
         .topbar { background:linear-gradient(135deg,#111827,#1f2937,#312e81); color:white; padding:22px 28px; box-shadow:0 12px 30px rgba(15,23,42,.16); }
-        .topbar-inner { max-width:900px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:16px; }
-        .container { max-width:900px; margin:24px auto; padding:0 20px 24px; }
+        .topbar-inner { max-width:1100px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+        .container { max-width:1100px; margin:24px auto; padding:0 20px 24px; }
         .card { background:white; border-radius:18px; padding:22px; box-shadow:0 10px 24px rgba(15,23,42,.06); border:1px solid #e2e8f0; margin-bottom:20px; }
         label { display:block; color:#64748b; font-weight:700; font-size:13px; margin-bottom:7px; }
-        input, textarea { width:100%; padding:12px 14px; border:1px solid #d1d5db; border-radius:12px; margin-bottom:16px; font-size:14px; }
+        input, textarea, select { width:100%; padding:12px 14px; border:1px solid #d1d5db; border-radius:12px; margin-bottom:16px; font-size:14px; background:white; }
         textarea { min-height:90px; resize:vertical; }
         .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
         .full { grid-column:1 / -1; }
@@ -26,84 +26,166 @@
         .password { font-family:Consolas, monospace; background:#eef2ff; color:#312e81; padding:4px 8px; border-radius:8px; }
         .actions { display:flex; gap:10px; flex-wrap:wrap; }
         .warning { background:#fff7ed; color:#9a3412; padding:14px; border-radius:14px; line-height:1.6; }
+        .pill { display:inline-block; padding:5px 10px; border-radius:999px; font-size:12px; font-weight:800; }
+        .ok { background:#dcfce7; color:#166534; }
+        .bad { background:#fee2e2; color:#991b1b; }
+        .info { background:#eef2ff; color:#4338ca; }
+        .table-wrap { overflow-x:auto; border:1px solid #e5e7eb; border-radius:14px; }
+        table { width:100%; min-width:900px; border-collapse:collapse; }
+        th { background:#111827; color:white; text-align:left; padding:12px; }
+        td { padding:12px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+        .muted { color:#64748b; font-size:13px; }
         @media (max-width:760px){ .topbar-inner{flex-direction:column;align-items:flex-start;} .grid{grid-template-columns:1fr;} button,.btn{width:100%;text-align:center;} .actions{flex-direction:column;} }
     </style>
 </head>
 <body>
-    <div class="topbar">
-        <div class="topbar-inner">
-            <h1>Edit Guild {{ guild.guild_tag }}</h1>
-            <a class="btn" href="/site-admin">Back to Site Admin</a>
-        </div>
+<div class="topbar">
+    <div class="topbar-inner">
+        <h1>Edit Guild {{ guild.guild_tag }}</h1>
+        <a class="btn" href="/site-admin">Back to Site Admin</a>
     </div>
+</div>
 
-    <div class="container">
-        <div class="card">
-            <h2>Current Guild Details</h2>
-            <div class="meta">
-                <strong>Guild Tag:</strong> {{ guild.guild_tag }}<br>
-                <strong>Email:</strong> {{ guild.email }}<br>
-                <strong>Guild Password:</strong> <span class="password">{{ guild.guild_password_plain or 'Not stored' }}</span><br>
-                <strong>Admin Password:</strong> <span class="password">{{ guild.admin_password_plain or 'Not stored' }}</span><br>
-                <strong>Status:</strong>
-                {% if guild.is_disabled %}
-                    Disabled{% if guild.disabled_reason %} — {{ guild.disabled_reason }}{% endif %}
-                {% else %}
-                    Active
-                {% endif %}
-            </div>
+<div class="container">
+    <div class="card">
+        <h2>Current Guild Details</h2>
+        <div class="meta">
+            <strong>Guild Tag:</strong> {{ guild.guild_tag }}<br>
+            <strong>Email:</strong> {{ guild.email }}<br>
+            <strong>Billing Email:</strong> {{ guild.billing_email or guild.email }}<br>
+            <strong>Guild Password:</strong> <span class="password">{{ guild.guild_password_plain or 'Not stored' }}</span><br>
+            <strong>Admin Password:</strong> <span class="password">{{ guild.admin_password_plain or 'Not stored' }}</span><br>
+            <strong>Guild Status:</strong>
+            {% if guild.is_disabled %}<span class="pill bad">Disabled</span>{% else %}<span class="pill ok">Enabled</span>{% endif %}<br>
+            <strong>Billing Status:</strong>
+            {% if guild.manual_access %}<span class="pill info">Manual Active</span>{% else %}<span class="pill">{{ guild.billing_status_label }}</span>{% endif %}<br>
+            <strong>Plan:</strong> {{ guild.plan_label }} — {{ guild.plan_price }}<br>
+            <strong>Trial Ends:</strong> {{ guild.trial_ends_at or '-' }}<br>
+            <strong>Current Period Ends:</strong> {{ guild.current_period_end or '-' }}<br>
+            <strong>Last Payment:</strong>
+            {% if guild.last_payment_amount %}£{{ '%.2f'|format((guild.last_payment_amount or 0) / 100) }} {{ guild.last_payment_currency }} at {{ guild.last_payment_at }}{% else %}No payments yet{% endif %}
+        </div>
 
-            <form method="post" action="/site-admin/guild/{{ guild.id }}">
-                <div class="grid">
-                    <div class="full">
-                        <label>Email Address</label>
-                        <input type="email" name="email" value="{{ guild.email }}" required>
-                    </div>
-                    <div>
-                        <label>New Guild Password</label>
-                        <input type="text" name="guild_password" placeholder="Leave blank to keep current">
-                    </div>
-                    <div>
-                        <label>New Admin Password</label>
-                        <input type="text" name="admin_password" placeholder="Leave blank to keep current">
-                    </div>
-                    <div class="full">
-                        <label>Disabled Reason / Support Notes</label>
-                        <textarea name="disabled_reason" placeholder="Optional reason shown when disabled">{{ guild.disabled_reason or '' }}</textarea>
-                    </div>
+        <form method="post" action="/site-admin/guild/{{ guild.id }}">
+            <div class="grid">
+                <div>
+                    <label>Email Address</label>
+                    <input type="email" name="email" value="{{ guild.email }}" required>
                 </div>
-                <button type="submit">Save Guild Details</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h2>Guild Access Control</h2>
-            <div class="actions">
-                {% if guild.is_disabled %}
-                <form method="post" action="/site-admin/guild/{{ guild.id }}/enable">
-                    <button class="success" type="submit">Enable Guild</button>
-                </form>
-                {% else %}
-                <form method="post" action="/site-admin/guild/{{ guild.id }}/disable">
-                    <input type="hidden" name="disabled_reason" value="{{ guild.disabled_reason or 'Disabled by site admin' }}">
-                    <button class="warn" type="submit">Disable Guild</button>
-                </form>
-                {% endif %}
-                <a class="btn" href="/site-admin/impersonate/{{ guild.id }}">Open Guild</a>
+                <div>
+                    <label>Billing Email Address</label>
+                    <input type="email" name="billing_email" value="{{ guild.billing_email or guild.email }}" required>
+                </div>
+                <div>
+                    <label>Billing Plan</label>
+                    <select name="stripe_plan">
+                        <option value="monthly" {% if guild.stripe_plan == 'monthly' %}selected{% endif %}>Monthly — £9.99</option>
+                        <option value="six_month" {% if guild.stripe_plan == 'six_month' %}selected{% endif %}>6 Months — £49.99</option>
+                        <option value="twelve_month" {% if guild.stripe_plan == 'twelve_month' %}selected{% endif %}>12 Months — £84.99</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Manual Subscription Status Override</label>
+                    <select name="subscription_status">
+                        <option value="">Keep current</option>
+                        <option value="pending_billing">Pending Billing</option>
+                        <option value="trialing">Trialing</option>
+                        <option value="active">Active</option>
+                        <option value="past_due">Past Due</option>
+                        <option value="canceled">Canceled</option>
+                        <option value="unpaid">Unpaid</option>
+                    </select>
+                </div>
+                <div>
+                    <label>New Guild Password</label>
+                    <input type="text" name="guild_password" placeholder="Leave blank to keep current">
+                </div>
+                <div>
+                    <label>New Admin Password</label>
+                    <input type="text" name="admin_password" placeholder="Leave blank to keep current">
+                </div>
+                <div class="full">
+                    <label>Disabled Reason / Support Notes</label>
+                    <textarea name="disabled_reason" placeholder="Optional reason shown when disabled">{{ guild.disabled_reason or '' }}</textarea>
+                </div>
             </div>
-        </div>
+            <button type="submit">Save Guild Details</button>
+        </form>
+    </div>
 
-        <div class="card">
-            <h2>Delete Guild</h2>
-            <div class="warning">
-                This permanently deletes the guild and all data linked to it. Type the exact guild tag to confirm.
-            </div>
-            <form method="post" action="/site-admin/guild/{{ guild.id }}/delete">
-                <label>Type {{ guild.guild_tag }} to delete</label>
-                <input type="text" name="confirm_text" placeholder="{{ guild.guild_tag }}" required>
-                <button class="danger" type="submit">Delete Guild Permanently</button>
+    <div class="card">
+        <h2>Billing Access Control</h2>
+        <div class="actions">
+            {% if guild.manual_access %}
+            <form method="post" action="/site-admin/guild/{{ guild.id }}/manual-deactivate">
+                <button class="warn" type="submit">Remove Manual Access</button>
             </form>
+            {% else %}
+            <form method="post" action="/site-admin/guild/{{ guild.id }}/manual-activate">
+                <input type="hidden" name="manual_access_reason" value="Manual access granted by site admin">
+                <button class="success" type="submit">Activate / Bypass Stripe</button>
+            </form>
+            {% endif %}
+            <a class="btn" href="/billing/checkout/{{ guild.id }}">Open Stripe Checkout</a>
+        </div>
+        <p class="muted">Manual activation lets you trial features or keep your own guild active without Stripe payment.</p>
+    </div>
+
+    <div class="card">
+        <h2>Guild Access Control</h2>
+        <div class="actions">
+            {% if guild.is_disabled %}
+            <form method="post" action="/site-admin/guild/{{ guild.id }}/enable">
+                <button class="success" type="submit">Enable Guild</button>
+            </form>
+            {% else %}
+            <form method="post" action="/site-admin/guild/{{ guild.id }}/disable">
+                <input type="hidden" name="disabled_reason" value="{{ guild.disabled_reason or 'Disabled by site admin' }}">
+                <button class="warn" type="submit">Disable Guild</button>
+            </form>
+            {% endif %}
+            <a class="btn" href="/site-admin/impersonate/{{ guild.id }}">Open Guild</a>
         </div>
     </div>
+
+    <div class="card">
+        <h2>Payment History</h2>
+        {% if payments|length == 0 %}
+            <div class="meta">No Stripe/manual billing events recorded yet.</div>
+        {% else %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th><th>Event</th><th>Status</th><th>Amount</th><th>Description</th><th>Stripe IDs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in payments %}
+                    <tr>
+                        <td>{{ p.created_at }}</td>
+                        <td>{{ p.event_type }}</td>
+                        <td>{{ p.status }}</td>
+                        <td>{% if p.amount %}£{{ '%.2f'|format((p.amount or 0) / 100) }} {{ p.currency }}{% else %}-{% endif %}</td>
+                        <td>{{ p.description }}</td>
+                        <td class="muted">Event: {{ p.stripe_event_id or '-' }}<br>Invoice: {{ p.stripe_invoice_id or '-' }}<br>Sub: {{ p.stripe_subscription_id or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Delete Guild</h2>
+        <div class="warning">This permanently deletes the guild and all data linked to it. Type the exact guild tag to confirm.</div>
+        <form method="post" action="/site-admin/guild/{{ guild.id }}/delete">
+            <label>Type {{ guild.guild_tag }} to delete</label>
+            <input type="text" name="confirm_text" placeholder="{{ guild.guild_tag }}" required>
+            <button class="danger" type="submit">Delete Guild Permanently</button>
+        </form>
+    </div>
+</div>
 </body>
 </html>

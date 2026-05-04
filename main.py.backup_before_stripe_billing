@@ -16,7 +16,6 @@ import hashlib
 import hmac
 import secrets
 import re
-import stripe
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "super-secret-key-change-this"))
@@ -48,45 +47,6 @@ GUILD_DATA_TABLES = [
 SITE_ADMIN_PASSWORD = os.getenv("SITE_ADMIN_PASSWORD", "siteadmin123")
 DEFAULT_MJ_GUILD_PASSWORD = os.getenv("DEFAULT_MJ_GUILD_PASSWORD", "admin123")
 DEFAULT_MJ_ADMIN_PASSWORD = os.getenv("DEFAULT_MJ_ADMIN_PASSWORD", "admin123")
-
-
-# Stripe billing configuration
-# Create these as recurring Stripe Prices:
-# - monthly: £9.99 / month
-# - six_month: £49.99 / 6 months
-# - twelve_month: £84.99 / 12 months
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_PRICE_MONTHLY_ID = os.getenv("STRIPE_PRICE_MONTHLY_ID", "")
-STRIPE_PRICE_6_MONTH_ID = os.getenv("STRIPE_PRICE_6_MONTH_ID", "")
-STRIPE_PRICE_12_MONTH_ID = os.getenv("STRIPE_PRICE_12_MONTH_ID", "")
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
-
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
-
-BILLING_PLANS = {
-    "monthly": {
-        "label": "Monthly",
-        "display_price": "£9.99 / month",
-        "price_id_env": "STRIPE_PRICE_MONTHLY_ID",
-        "price_id": STRIPE_PRICE_MONTHLY_ID,
-    },
-    "six_month": {
-        "label": "6 Months",
-        "display_price": "£49.99 / 6 months",
-        "price_id_env": "STRIPE_PRICE_6_MONTH_ID",
-        "price_id": STRIPE_PRICE_6_MONTH_ID,
-    },
-    "twelve_month": {
-        "label": "12 Months",
-        "display_price": "£84.99 / 12 months",
-        "price_id_env": "STRIPE_PRICE_12_MONTH_ID",
-        "price_id": STRIPE_PRICE_12_MONTH_ID,
-    },
-}
-
-BILLING_ALLOWED_STATUSES = {"active", "trialing", "manual_active"}
 
 
 def hash_password(password: str) -> str:
@@ -129,100 +89,6 @@ def require_guild(request: Request):
 
 def is_site_admin(request: Request):
     return request.session.get("site_admin", False)
-
-
-
-def dt_from_unix(value):
-    if not value:
-        return None
-    try:
-        return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        return None
-
-
-def get_billing_plan(plan_key: str):
-    return BILLING_PLANS.get(plan_key or "monthly", BILLING_PLANS["monthly"])
-
-
-def billing_status_label(status: str, manual_access=0):
-    if int(manual_access or 0) == 1:
-        return "Manual Active"
-    labels = {
-        "not_started": "Not Started",
-        "pending_billing": "Pending Billing",
-        "trialing": "Trialing",
-        "active": "Active",
-        "past_due": "Past Due",
-        "unpaid": "Unpaid",
-        "canceled": "Canceled",
-        "incomplete": "Incomplete",
-        "incomplete_expired": "Incomplete Expired",
-        "manual_active": "Manual Active",
-    }
-    return labels.get(status or "not_started", status or "Not Started")
-
-
-def guild_billing_allowed(guild):
-    if not guild:
-        return False, "Guild not found."
-    if int(guild["is_disabled"] or 0) == 1:
-        reason = (guild["disabled_reason"] or "This guild has been disabled by site admin.").strip()
-        return False, f"Guild is disabled. {reason}"
-    if int(guild["manual_access"] or 0) == 1:
-        return True, ""
-    status = guild["subscription_status"] or "not_started"
-    if status in BILLING_ALLOWED_STATUSES:
-        return True, ""
-    if status == "pending_billing":
-        return False, "Billing is not complete for this guild. Please complete checkout or contact support."
-    if status in {"canceled", "unpaid", "past_due", "incomplete", "incomplete_expired"}:
-        return False, f"Guild subscription is {billing_status_label(status)}. Please update billing or contact support."
-    return False, "Guild billing is not active. Please complete checkout or contact support."
-
-
-def record_payment_event(conn, guild_id, event_type, status="", amount=None, currency="", description="", stripe_event_id="", stripe_invoice_id="", stripe_subscription_id=""):
-    conn.execute("""
-        INSERT INTO guild_payment_events
-        (guild_id, event_type, status, amount, currency, description, stripe_event_id, stripe_invoice_id, stripe_subscription_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        guild_id,
-        event_type,
-        status or "",
-        amount,
-        (currency or "").upper(),
-        description or "",
-        stripe_event_id or "",
-        stripe_invoice_id or "",
-        stripe_subscription_id or "",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    ))
-
-
-async def guild_billing_guard(request: Request, call_next):
-    path = request.url.path
-    exempt_prefixes = (
-        "/guild/login", "/guild/create", "/guild/logout",
-        "/billing/checkout", "/billing/success", "/billing/cancel",
-        "/stripe/webhook", "/site-admin", "/favicon.ico"
-    )
-    if path == "/" or path.startswith(exempt_prefixes):
-        return await call_next(request)
-    guild_id = request.session.get("guild_id")
-    if guild_id:
-        conn = get_conn()
-        guild = conn.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
-        conn.close()
-        allowed, message = guild_billing_allowed(guild)
-        if not allowed:
-            request.session.clear()
-            return templates.TemplateResponse(request, "guild_login.html", {"error": message}, status_code=403)
-    return await call_next(request)
-
-
-if not any(getattr(mw, "cls", None).__name__ == "BaseHTTPMiddleware" for mw in app.user_middleware):
-    app.middleware("http")(guild_billing_guard)
 
 
 
@@ -514,12 +380,7 @@ def init_db():
         SET guild_password_plain = CASE WHEN guild_password_plain IS NULL OR TRIM(guild_password_plain) = '' THEN ? ELSE guild_password_plain END,
             admin_password_plain = CASE WHEN admin_password_plain IS NULL OR TRIM(admin_password_plain) = '' THEN ? ELSE admin_password_plain END,
             is_disabled = COALESCE(is_disabled, 0),
-            disabled_reason = COALESCE(disabled_reason, ''),
-            billing_email = CASE WHEN billing_email IS NULL OR TRIM(billing_email) = '' THEN email ELSE billing_email END,
-            stripe_plan = COALESCE(stripe_plan, 'monthly'),
-            subscription_status = CASE WHEN subscription_status IS NULL OR TRIM(subscription_status) = '' OR subscription_status = 'not_started' THEN 'manual_active' ELSE subscription_status END,
-            manual_access = CASE WHEN manual_access IS NULL THEN 1 ELSE manual_access END,
-            manual_access_reason = CASE WHEN manual_access_reason IS NULL OR TRIM(manual_access_reason) = '' THEN 'Existing M/J guild bypass' ELSE manual_access_reason END
+            disabled_reason = COALESCE(disabled_reason, '')
         WHERE guild_tag = ? COLLATE BINARY
     """, (DEFAULT_MJ_GUILD_PASSWORD, DEFAULT_MJ_ADMIN_PASSWORD, "M/J"))
 
@@ -957,9 +818,9 @@ def guild_login(request: Request, guild_tag: str = Form(...), guild_password: st
     conn.close()
     if not guild or not verify_password(guild_password, guild["guild_password_hash"]):
         return templates.TemplateResponse(request, "guild_login.html", {"error": "Incorrect guild tag or password."}, status_code=401)
-    allowed, billing_message = guild_billing_allowed(guild)
-    if not allowed:
-        return templates.TemplateResponse(request, "guild_login.html", {"error": billing_message}, status_code=403)
+    if int(guild["is_disabled"] or 0) == 1:
+        reason = (guild["disabled_reason"] or "This guild has been disabled by site admin.").strip()
+        return templates.TemplateResponse(request, "guild_login.html", {"error": f"Guild is disabled. {reason}"}, status_code=403)
     request.session.clear()
     request.session["guild_id"] = guild["id"]
     request.session["guild_tag"] = guild["guild_tag"]
@@ -969,7 +830,7 @@ def guild_login(request: Request, guild_tag: str = Form(...), guild_password: st
 
 @app.get("/guild/create", response_class=HTMLResponse)
 def create_guild_page(request: Request):
-    return templates.TemplateResponse(request, "create_guild.html", {"error": "", "plans": BILLING_PLANS})
+    return templates.TemplateResponse(request, "create_guild.html", {"error": ""})
 
 
 @app.post("/guild/create")
@@ -979,46 +840,36 @@ def create_guild(
     email: str = Form(...),
     confirm_email: str = Form(...),
     guild_password: str = Form(...),
-    admin_password: str = Form(...),
-    billing_plan: str = Form("monthly")
+    admin_password: str = Form(...)
 ):
     guild_tag = guild_tag.strip()
     email = email.strip()
     confirm_email = confirm_email.strip()
     if not valid_guild_tag(guild_tag):
-        return templates.TemplateResponse(request, "create_guild.html", {"error": "Guild tag must be exactly 3 printable, non-space characters.", "plans": BILLING_PLANS}, status_code=400)
+        return templates.TemplateResponse(request, "create_guild.html", {"error": "Guild tag must be exactly 3 printable, non-space characters."}, status_code=400)
     if email.lower() != confirm_email.lower():
-        return templates.TemplateResponse(request, "create_guild.html", {"error": "Email addresses do not match.", "plans": BILLING_PLANS}, status_code=400)
+        return templates.TemplateResponse(request, "create_guild.html", {"error": "Email addresses do not match."}, status_code=400)
     if not guild_password or not admin_password:
-        return templates.TemplateResponse(request, "create_guild.html", {"error": "Guild and admin passwords are required.", "plans": BILLING_PLANS}, status_code=400)
+        return templates.TemplateResponse(request, "create_guild.html", {"error": "Guild and admin passwords are required."}, status_code=400)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_conn()
     try:
         c = conn.cursor()
-        plan = get_billing_plan(billing_plan)
         c.execute("""
-            INSERT INTO guilds (
-                guild_tag, email, billing_email, guild_password_hash, admin_password_hash,
-                guild_password_plain, admin_password_plain, is_disabled, disabled_reason,
-                stripe_plan, stripe_price_id, subscription_status, manual_access,
-                created_at, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            guild_tag, email, email, hash_password(guild_password), hash_password(admin_password),
-            guild_password, admin_password, 0, "",
-            billing_plan, plan["price_id"], "pending_billing", 0,
-            now, now
-        ))
+            INSERT INTO guilds (guild_tag, email, guild_password_hash, admin_password_hash, guild_password_plain, admin_password_plain, is_disabled, disabled_reason, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (guild_tag, email, hash_password(guild_password), hash_password(admin_password), guild_password, admin_password, 0, "", now, now))
         guild_id = c.lastrowid
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
-        return templates.TemplateResponse(request, "create_guild.html", {"error": "That guild tag already exists.", "plans": BILLING_PLANS}, status_code=400)
+        return templates.TemplateResponse(request, "create_guild.html", {"error": "That guild tag already exists."}, status_code=400)
     conn.close()
     request.session.clear()
-    request.session["pending_guild_id"] = guild_id
-    return RedirectResponse(url=f"/billing/checkout/{guild_id}", status_code=302)
+    request.session["guild_id"] = guild_id
+    request.session["guild_tag"] = guild_tag
+    request.session["is_admin"] = True
+    return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/guild/logout")
@@ -1053,15 +904,8 @@ def site_admin_dashboard(request: Request):
         GROUP BY g.id
         ORDER BY g.created_at DESC
     """).fetchall()
-    guilds = []
-    for g in rows:
-        d = dict(g)
-        d["billing_status_label"] = billing_status_label(d.get("subscription_status"), d.get("manual_access"))
-        d["plan_label"] = get_billing_plan(d.get("stripe_plan"))["label"]
-        d["plan_price"] = get_billing_plan(d.get("stripe_plan"))["display_price"]
-        guilds.append(d)
     conn.close()
-    return templates.TemplateResponse(request, "site_admin_dashboard.html", {"guilds": guilds})
+    return templates.TemplateResponse(request, "site_admin_dashboard.html", {"guilds": rows})
 
 
 @app.get("/site-admin/guild/{guild_id}", response_class=HTMLResponse)
@@ -1070,20 +914,10 @@ def site_admin_edit_guild_page(request: Request, guild_id: int):
         return RedirectResponse(url="/site-admin/login", status_code=302)
     conn = get_conn()
     guild = conn.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
-    payments = conn.execute("""
-        SELECT * FROM guild_payment_events
-        WHERE guild_id = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT 50
-    """, (guild_id,)).fetchall()
     conn.close()
     if not guild:
         return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
-    gd = dict(guild)
-    gd["billing_status_label"] = billing_status_label(gd.get("subscription_status"), gd.get("manual_access"))
-    gd["plan_label"] = get_billing_plan(gd.get("stripe_plan"))["label"]
-    gd["plan_price"] = get_billing_plan(gd.get("stripe_plan"))["display_price"]
-    return templates.TemplateResponse(request, "site_admin_edit_guild.html", {"guild": gd, "payments": payments, "plans": BILLING_PLANS})
+    return templates.TemplateResponse(request, "site_admin_edit_guild.html", {"guild": guild})
 
 
 @app.post("/site-admin/guild/{guild_id}")
@@ -1091,9 +925,6 @@ def site_admin_edit_guild(
     request: Request,
     guild_id: int,
     email: str = Form(""),
-    billing_email: str = Form(""),
-    stripe_plan: str = Form("monthly"),
-    subscription_status: str = Form(""),
     guild_password: str = Form(""),
     admin_password: str = Form(""),
     disabled_reason: str = Form("")
@@ -1106,12 +937,8 @@ def site_admin_edit_guild(
     if not guild:
         conn.close()
         return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
-    plan = get_billing_plan(stripe_plan)
-    updates = ["email = ?", "billing_email = ?", "stripe_plan = ?", "stripe_price_id = ?", "disabled_reason = ?", "updated_at = ?"]
-    values = [email.strip(), (billing_email or email).strip(), stripe_plan, plan["price_id"], disabled_reason.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
-    if subscription_status.strip():
-        updates.append("subscription_status = ?")
-        values.append(subscription_status.strip())
+    updates = ["email = ?", "disabled_reason = ?", "updated_at = ?"]
+    values = [email.strip(), disabled_reason.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
     if guild_password.strip():
         updates.append("guild_password_hash = ?")
         values.append(hash_password(guild_password.strip()))
@@ -1129,45 +956,6 @@ def site_admin_edit_guild(
     return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
 
 
-
-
-
-@app.post("/site-admin/guild/{guild_id}/manual-activate")
-def site_admin_manual_activate_guild(request: Request, guild_id: int, manual_access_reason: str = Form("Manual access granted by site admin")):
-    if not is_site_admin(request):
-        return RedirectResponse(url="/site-admin/login", status_code=302)
-    conn = get_conn()
-    conn.execute("""
-        UPDATE guilds
-        SET manual_access = 1,
-            manual_access_reason = ?,
-            subscription_status = 'manual_active',
-            updated_at = ?
-        WHERE id = ?
-    """, (manual_access_reason.strip() or "Manual access granted by site admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
-    record_payment_event(conn, guild_id, "manual.activate", "manual_active", None, "GBP", manual_access_reason.strip() or "Manual access granted by site admin")
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
-
-
-@app.post("/site-admin/guild/{guild_id}/manual-deactivate")
-def site_admin_manual_deactivate_guild(request: Request, guild_id: int):
-    if not is_site_admin(request):
-        return RedirectResponse(url="/site-admin/login", status_code=302)
-    conn = get_conn()
-    conn.execute("""
-        UPDATE guilds
-        SET manual_access = 0,
-            manual_access_reason = '',
-            subscription_status = CASE WHEN stripe_subscription_id IS NULL OR TRIM(stripe_subscription_id) = '' THEN 'pending_billing' ELSE subscription_status END,
-            updated_at = ?
-        WHERE id = ?
-    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
-    record_payment_event(conn, guild_id, "manual.deactivate", "pending_billing", None, "GBP", "Manual access removed by site admin")
-    conn.commit()
-    conn.close()
-    return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
 
 
 @app.post("/site-admin/guild/{guild_id}/disable")
