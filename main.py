@@ -57,9 +57,9 @@ DEFAULT_MJ_ADMIN_PASSWORD = os.getenv("DEFAULT_MJ_ADMIN_PASSWORD", "admin123")
 # - twelve_month: £84.99 / 12 months
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-STRIPE_PRICE_MONTHLY_ID = os.getenv("STRIPE_PRICE_MONTHLY_ID", "")
-STRIPE_PRICE_6_MONTH_ID = os.getenv("STRIPE_PRICE_6_MONTH_ID", "")
-STRIPE_PRICE_12_MONTH_ID = os.getenv("STRIPE_PRICE_12_MONTH_ID", "")
+STRIPE_PRICE_MONTHLY_ID = os.getenv("STRIPE_PRICE_MONTHLY_ID", "") or os.getenv("STRIPE_PRICE_MONTHLY", "")
+STRIPE_PRICE_6_MONTH_ID = os.getenv("STRIPE_PRICE_6_MONTH_ID", "") or os.getenv("STRIPE_PRICE_6M", "")
+STRIPE_PRICE_12_MONTH_ID = os.getenv("STRIPE_PRICE_12_MONTH_ID", "") or os.getenv("STRIPE_PRICE_12M", "")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 if STRIPE_SECRET_KEY:
@@ -267,6 +267,44 @@ def init_db():
     }.items():
         if not column_exists(conn, "guilds", col):
             c.execute(f"ALTER TABLE guilds ADD COLUMN {col} {definition}")
+
+    # Stripe / billing columns. Kept here so Render databases self-migrate on deploy.
+    for col, definition in {
+        "billing_email": "TEXT",
+        "stripe_customer_id": "TEXT",
+        "stripe_subscription_id": "TEXT",
+        "stripe_price_id": "TEXT",
+        "subscription_status": "TEXT DEFAULT 'not_started'",
+        "trial_ends_at": "TEXT",
+        "current_period_end": "TEXT",
+        "stripe_plan": "TEXT DEFAULT 'monthly'",
+        "manual_billing_override": "INTEGER DEFAULT 0",
+        "manual_billing_reason": "TEXT",
+        "last_payment_at": "TEXT",
+        "last_payment_amount": "INTEGER",
+        "last_payment_currency": "TEXT",
+        "manual_access": "INTEGER DEFAULT 0",
+        "manual_access_reason": "TEXT",
+        "manual_access_until": "TEXT",
+    }.items():
+        if not column_exists(conn, "guilds", col):
+            c.execute(f"ALTER TABLE guilds ADD COLUMN {col} {definition}")
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS guild_payment_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER,
+            event_type TEXT,
+            status TEXT,
+            amount INTEGER,
+            currency TEXT,
+            description TEXT,
+            stripe_event_id TEXT,
+            stripe_invoice_id TEXT,
+            stripe_subscription_id TEXT,
+            created_at TEXT
+        )
+    """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS members (
@@ -1028,6 +1066,241 @@ def guild_logout(request: Request):
     return RedirectResponse(url="/", status_code=302)
 
 
+@app.get("/billing/checkout/{guild_id}")
+def billing_checkout(request: Request, guild_id: int):
+    conn = get_conn()
+    guild = conn.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
+
+    if not guild:
+        conn.close()
+        return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
+
+    # Only allow checkout for the pending guild creator, current guild admin, or site admin.
+    pending_guild_id = request.session.get("pending_guild_id")
+    current_id = request.session.get("guild_id")
+    if not is_site_admin(request) and pending_guild_id != guild_id and current_id != guild_id:
+        conn.close()
+        return HTMLResponse("<h2>Unauthorised</h2>", status_code=403)
+
+    if not STRIPE_SECRET_KEY:
+        conn.close()
+        return HTMLResponse("<h2>Stripe is not configured: STRIPE_SECRET_KEY is missing.</h2>", status_code=500)
+
+    plan_key = guild["stripe_plan"] or "monthly"
+    plan = get_billing_plan(plan_key)
+    price_id = guild["stripe_price_id"] or plan["price_id"]
+
+    if not price_id:
+        conn.close()
+        return HTMLResponse(
+            f"<h2>Stripe price is missing for {plan['label']}.</h2>"
+            f"<p>Set the correct Render environment variable for this plan.</p>",
+            status_code=500
+        )
+
+    try:
+        customer_id = guild["stripe_customer_id"]
+        if not customer_id:
+            customer = stripe.Customer.create(
+                email=guild["billing_email"] or guild["email"],
+                metadata={"guild_id": str(guild_id), "guild_tag": guild["guild_tag"]}
+            )
+            customer_id = customer.id
+            conn.execute(
+                "UPDATE guilds SET stripe_customer_id = ?, updated_at = ? WHERE id = ?",
+                (customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
+            )
+            conn.commit()
+
+        checkout_session = stripe.checkout.Session.create(
+            mode="subscription",
+            customer=customer_id,
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url=f"{PUBLIC_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{PUBLIC_BASE_URL}/billing/cancel",
+            subscription_data={
+                "trial_period_days": 14,
+                "metadata": {"guild_id": str(guild_id), "guild_tag": guild["guild_tag"], "plan": plan_key}
+            },
+            metadata={"guild_id": str(guild_id), "guild_tag": guild["guild_tag"], "plan": plan_key}
+        )
+
+        conn.execute("""
+            UPDATE guilds
+            SET subscription_status = 'pending_billing',
+                stripe_price_id = ?,
+                updated_at = ?
+            WHERE id = ?
+        """, (price_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
+        conn.commit()
+        conn.close()
+        return RedirectResponse(url=checkout_session.url, status_code=303)
+
+    except Exception as e:
+        conn.close()
+        return HTMLResponse(f"<h2>Stripe checkout error</h2><pre>{str(e)}</pre>", status_code=500)
+
+
+@app.get("/billing/success")
+def billing_success(request: Request, session_id: str = ""):
+    # Webhook remains the source of truth, but this gives a clean return page.
+    return HTMLResponse("""
+        <html><body style="font-family:Segoe UI;padding:40px;">
+        <h1>Billing setup successful</h1>
+        <p>Your guild billing is being activated. You can now return and log in to your guild.</p>
+        <p><a href="/">Return to LM Guild Manager</a></p>
+        </body></html>
+    """)
+
+
+@app.get("/billing/cancel")
+def billing_cancel(request: Request):
+    return HTMLResponse("""
+        <html><body style="font-family:Segoe UI;padding:40px;">
+        <h1>Billing setup cancelled</h1>
+        <p>Your guild was created but billing was not completed. Please complete billing before logging in.</p>
+        <p><a href="/">Return to LM Guild Manager</a></p>
+        </body></html>
+    """)
+
+
+@app.get("/billing/portal")
+def billing_portal(request: Request):
+    guild_id = request.session.get("guild_id")
+    if not guild_id:
+        return RedirectResponse(url="/", status_code=302)
+
+    conn = get_conn()
+    guild = conn.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
+    conn.close()
+
+    if not guild:
+        return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
+
+    if int(guild["manual_access"] or 0) == 1 and not guild["stripe_customer_id"]:
+        return HTMLResponse("<h2>This guild is manually activated and does not have Stripe billing yet.</h2>", status_code=400)
+
+    if not guild["stripe_customer_id"]:
+        return RedirectResponse(url=f"/billing/checkout/{guild_id}", status_code=302)
+
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=guild["stripe_customer_id"],
+            return_url=f"{PUBLIC_BASE_URL}/"
+        )
+        return RedirectResponse(url=portal.url, status_code=303)
+    except Exception as e:
+        return HTMLResponse(f"<h2>Billing portal error</h2><pre>{str(e)}</pre>", status_code=500)
+
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    try:
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        else:
+            event = stripe.Event.construct_from(await request.json(), stripe.api_key)
+    except Exception:
+        return HTMLResponse("Invalid webhook", status_code=400)
+
+    event_type = event["type"]
+    data = event["data"]["object"]
+    conn = get_conn()
+
+    try:
+        if event_type == "checkout.session.completed":
+            guild_id = data.get("metadata", {}).get("guild_id")
+            if guild_id:
+                subscription_id = data.get("subscription")
+                customer_id = data.get("customer")
+                conn.execute("""
+                    UPDATE guilds
+                    SET stripe_customer_id = ?,
+                        stripe_subscription_id = ?,
+                        subscription_status = 'trialing',
+                        updated_at = ?
+                    WHERE id = ?
+                """, (customer_id, subscription_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
+                record_payment_event(conn, int(guild_id), event_type, "trialing", None, "GBP", "Checkout completed", event.get("id", ""), "", subscription_id or "")
+
+        elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
+            sub = data
+            guild_id = sub.get("metadata", {}).get("guild_id")
+            if guild_id:
+                status = sub.get("status") or ""
+                conn.execute("""
+                    UPDATE guilds
+                    SET stripe_subscription_id = ?,
+                        subscription_status = ?,
+                        trial_ends_at = ?,
+                        current_period_end = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                """, (
+                    sub.get("id"),
+                    status,
+                    dt_from_unix(sub.get("trial_end")),
+                    dt_from_unix(sub.get("current_period_end")),
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    int(guild_id)
+                ))
+                record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription updated", event.get("id", ""), "", sub.get("id") or "")
+
+        elif event_type == "customer.subscription.deleted":
+            sub = data
+            guild_id = sub.get("metadata", {}).get("guild_id")
+            if guild_id:
+                conn.execute("""
+                    UPDATE guilds
+                    SET subscription_status = 'canceled',
+                        current_period_end = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                """, (dt_from_unix(sub.get("current_period_end")), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
+                record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event.get("id", ""), "", sub.get("id") or "")
+
+        elif event_type == "invoice.paid":
+            invoice = data
+            customer_id = invoice.get("customer")
+            guild = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
+            if guild:
+                amount = invoice.get("amount_paid")
+                currency = invoice.get("currency") or "GBP"
+                conn.execute("""
+                    UPDATE guilds
+                    SET subscription_status = 'active',
+                        last_payment_at = ?,
+                        last_payment_amount = ?,
+                        last_payment_currency = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), amount, currency.upper(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
+                record_payment_event(conn, guild["id"], event_type, "paid", amount, currency, "Invoice paid", event.get("id", ""), invoice.get("id") or "", invoice.get("subscription") or "")
+
+        elif event_type == "invoice.payment_failed":
+            invoice = data
+            customer_id = invoice.get("customer")
+            guild = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
+            if guild:
+                conn.execute("""
+                    UPDATE guilds
+                    SET subscription_status = 'past_due',
+                        updated_at = ?
+                    WHERE id = ?
+                """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
+                record_payment_event(conn, guild["id"], event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event.get("id", ""), invoice.get("id") or "", invoice.get("subscription") or "")
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"status": "success"}
+
+
+
 @app.get("/site-admin/login", response_class=HTMLResponse)
 def site_admin_login_page(request: Request):
     return templates.TemplateResponse(request, "site_admin_login.html", {"error": ""})
@@ -1294,22 +1567,6 @@ def dashboard_view(
 
     conn.close()
 
-    
-    # Billing info (admin only)
-    billing = None
-    if admin_view:
-        conn2 = get_conn()
-        guild = conn2.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
-        conn2.close()
-        if guild:
-            billing = {
-                "plan": guild["stripe_plan"] or ("Manual" if guild["manual_access"] else "None"),
-                "status": guild["subscription_status"] or ("Manual" if guild["manual_access"] else "Inactive"),
-                "trial_ends_at": guild["trial_ends_at"],
-                "current_period_end": guild["current_period_end"],
-                "manual": guild["manual_access"]
-            }
-
     return templates.TemplateResponse(request, "dashboard.html", {
         "members": members,
         "search": search,
@@ -1329,8 +1586,7 @@ def dashboard_view(
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
         "guild_tag": current_guild_tag(request),
-        "is_admin": admin_view,
-        "billing": billing
+        "is_admin": admin_view
     })
 
 
