@@ -1208,6 +1208,7 @@ async def stripe_webhook(request: Request):
 
     event_type = event["type"]
     data = event["data"]["object"]
+
     # Stripe returns StripeObject instances, not normal dicts. Convert once so .get() works safely.
     if hasattr(data, "to_dict_recursive"):
         data = data.to_dict_recursive()
