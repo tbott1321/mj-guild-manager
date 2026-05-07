@@ -1206,28 +1206,12 @@ async def stripe_webhook(request: Request):
     except Exception:
         return HTMLResponse("Invalid webhook", status_code=400)
 
-    # Stripe returns StripeObject instances, not normal dicts.
-    # Convert event and nested objects to plain dicts before using .get().
-    if hasattr(event, "to_dict_recursive"):
-        event = event.to_dict_recursive()
-    elif not isinstance(event, dict):
-        event = dict(event)
+    event_type = event["type"]
+    data = event["data"]["object"]
 
-    event_type = event.get("type", "")
-    event_id = event_id
-    data = event.get("data", {}).get("object", {})
-
-    def stripe_safe_dict(obj):
-        if hasattr(obj, "to_dict_recursive"):
-            return obj.to_dict_recursive()
-        if isinstance(obj, dict):
-            return obj
-        try:
-            return dict(obj)
-        except Exception:
-            return {}
-
-    data = stripe_safe_dict(data)
+    # Stripe returns StripeObject instances, not normal dicts. Convert once so .get() works safely.
+    if hasattr(data, "to_dict_recursive"):
+        data = data.to_dict_recursive()
     conn = get_conn()
 
     try:
@@ -1244,10 +1228,10 @@ async def stripe_webhook(request: Request):
                         updated_at = ?
                     WHERE id = ?
                 """, (customer_id, subscription_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
-                record_payment_event(conn, int(guild_id), event_type, "trialing", None, "GBP", "Checkout completed", event_id, "", subscription_id or "")
+                record_payment_event(conn, int(guild_id), event_type, "trialing", None, "GBP", "Checkout completed", event.get("id", ""), "", subscription_id or "")
 
         elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
-            sub = stripe_safe_dict(data)
+            sub = data
             guild_id = sub.get("metadata", {}).get("guild_id")
             if guild_id:
                 status = sub.get("status") or ""
@@ -1267,10 +1251,10 @@ async def stripe_webhook(request: Request):
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     int(guild_id)
                 ))
-                record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription updated", event_id, "", sub.get("id") or "")
+                record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription updated", event.get("id", ""), "", sub.get("id") or "")
 
         elif event_type == "customer.subscription.deleted":
-            sub = stripe_safe_dict(data)
+            sub = data
             guild_id = sub.get("metadata", {}).get("guild_id")
             if guild_id:
                 conn.execute("""
@@ -1280,10 +1264,10 @@ async def stripe_webhook(request: Request):
                         updated_at = ?
                     WHERE id = ?
                 """, (dt_from_unix(sub.get("current_period_end")), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
-                record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event_id, "", sub.get("id") or "")
+                record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event.get("id", ""), "", sub.get("id") or "")
 
         elif event_type == "invoice.paid":
-            invoice = stripe_safe_dict(data)
+            invoice = data
             customer_id = invoice.get("customer")
             guild = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
             if guild:
@@ -1298,10 +1282,10 @@ async def stripe_webhook(request: Request):
                         updated_at = ?
                     WHERE id = ?
                 """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), amount, currency.upper(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
-                record_payment_event(conn, guild["id"], event_type, "paid", amount, currency, "Invoice paid", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
+                record_payment_event(conn, guild["id"], event_type, "paid", amount, currency, "Invoice paid", event.get("id", ""), invoice.get("id") or "", invoice.get("subscription") or "")
 
         elif event_type == "invoice.payment_failed":
-            invoice = stripe_safe_dict(data)
+            invoice = data
             customer_id = invoice.get("customer")
             guild = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
             if guild:
@@ -1311,7 +1295,7 @@ async def stripe_webhook(request: Request):
                         updated_at = ?
                     WHERE id = ?
                 """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
-                record_payment_event(conn, guild["id"], event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
+                record_payment_event(conn, guild["id"], event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event.get("id", ""), invoice.get("id") or "", invoice.get("subscription") or "")
 
         conn.commit()
     finally:
