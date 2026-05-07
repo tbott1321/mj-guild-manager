@@ -1210,10 +1210,8 @@ async def stripe_webhook(request: Request):
     # Convert event and nested objects to plain dicts before using .get().
     if hasattr(event, "to_dict_recursive"):
         event = event.to_dict_recursive()
-    elif hasattr(event, "_data"):
-        event = event._data
     elif not isinstance(event, dict):
-        event = {}
+        event = dict(event)
 
     event_type = event.get("type", "")
     event_id = event_id
