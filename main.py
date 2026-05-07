@@ -1305,45 +1305,124 @@ def billing_checkout(request: Request, guild_id: int):
 
 @app.get("/billing/success")
 def billing_success(request: Request, session_id: str = ""):
+    """
+    Stripe redirects the user here after checkout.
+
+    Important: this route must never block the user with a 500 after Stripe has
+    successfully created the checkout session/subscription. Webhooks are the
+    long-term source of truth, but this page is the immediate safety net that
+    unlocks the guild trial so the user can log in straight away.
+    """
     message = "Your guild trial is active. You can now log in to your guild."
-    status_code = 200
+    detail = ""
 
     if not session_id:
-        message = "Billing returned successfully, but no Stripe session id was supplied. If login is blocked, contact support."
-        status_code = 400
-    elif not STRIPE_SECRET_KEY:
-        message = "Stripe is not configured on the server. STRIPE_SECRET_KEY is missing."
-        status_code = 500
-    else:
-        conn = get_conn()
-        try:
-            session = stripe.checkout.Session.retrieve(session_id)
-            guild_id, sync_status = sync_guild_from_checkout_session(conn, session)
-            if guild_id:
-                request.session.pop("pending_guild_id", None)
-                record_payment_event(
-                    conn,
-                    guild_id,
-                    "billing.success",
-                    sync_status or "trialing",
-                    None,
-                    "GBP",
-                    "Checkout success page synced guild billing",
-                    "",
-                    "",
-                    stripe_to_dict(session).get("subscription") or "",
-                )
-                conn.commit()
-            else:
-                conn.rollback()
-                message = f"Billing succeeded, but the guild could not be matched: {sync_status}"
-                status_code = 500
-        except Exception as e:
+        return HTMLResponse("""
+            <html><body style="font-family:Segoe UI;padding:40px;">
+            <h1>Billing setup returned</h1>
+            <p>No Stripe session id was supplied. If login is blocked, contact support.</p>
+            <p><a href="/guild/login">Log in to your guild</a></p>
+            <p><a href="/">Return to LM Guild Manager</a></p>
+            </body></html>
+        """, status_code=200)
+
+    if not STRIPE_SECRET_KEY:
+        return HTMLResponse("""
+            <html><body style="font-family:Segoe UI;padding:40px;">
+            <h1>Billing setup returned</h1>
+            <p>Stripe is not configured on the server. STRIPE_SECRET_KEY is missing.</p>
+            <p><a href="/">Return to LM Guild Manager</a></p>
+            </body></html>
+        """, status_code=200)
+
+    conn = get_conn()
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+        session_dict = stripe_to_dict(session)
+
+        # Prefer Stripe metadata/client_reference_id, then fall back to the
+        # pending guild id stored before redirecting to Stripe.
+        guild_id = find_guild_id_from_stripe_object(conn, session_dict)
+        if not guild_id:
+            pending_id = request.session.get("pending_guild_id")
+            if pending_id:
+                try:
+                    guild_id = int(pending_id)
+                except (TypeError, ValueError):
+                    guild_id = None
+
+        customer_id = session_dict.get("customer") or ""
+        subscription_id = session_dict.get("subscription") or ""
+        status = "trialing"
+        trial_end = None
+        current_period_end = None
+        price_id = ""
+
+        # Try to enrich with subscription details. If this fails for any reason,
+        # still activate trialing access from the verified checkout session.
+        if subscription_id:
+            try:
+                sub = stripe_to_dict(stripe.Subscription.retrieve(subscription_id))
+                status = sub.get("status") or "trialing"
+                # If Stripe returns incomplete immediately after redirect, keep
+                # the guild usable during the 14-day trial and let webhooks refine.
+                if status not in BILLING_ALLOWED_STATUSES:
+                    status = "trialing"
+                customer_id = sub.get("customer") or customer_id
+                trial_end = sub.get("trial_end")
+                current_period_end = sub.get("current_period_end")
+                items = stripe_nested_get(sub, "items", "data", default=[])
+                if isinstance(items, list) and items:
+                    price = stripe_to_dict(stripe_to_dict(items[0]).get("price"))
+                    price_id = price.get("id") or ""
+
+                if not guild_id:
+                    guild_id = find_guild_id_from_stripe_object(conn, sub)
+            except Exception as sub_error:
+                detail = f"Subscription detail sync skipped: {sub_error}"
+                status = "trialing"
+
+        if guild_id:
+            sync_guild_subscription(
+                conn,
+                int(guild_id),
+                customer_id=customer_id,
+                subscription_id=subscription_id,
+                status=status or "trialing",
+                trial_end=trial_end,
+                current_period_end=current_period_end,
+                price_id=price_id,
+            )
+            record_payment_event(
+                conn,
+                int(guild_id),
+                "billing.success",
+                status or "trialing",
+                None,
+                "GBP",
+                "Checkout success page activated guild trial" + (f". {detail}" if detail else ""),
+                "",
+                "",
+                subscription_id or "",
+            )
+            conn.commit()
+            request.session.pop("pending_guild_id", None)
+        else:
             conn.rollback()
-            message = f"Billing succeeded, but the server could not sync the Stripe session: {str(e)}"
-            status_code = 500
-        finally:
-            conn.close()
+            message = "Billing succeeded, but the guild could not be matched automatically. Contact support or manually activate it in Site Admin."
+
+    except Exception as e:
+        conn.rollback()
+        # Do not show a 500 after payment. Log the error in payment history if we
+        # can, and let the user reach login/support instead of an error page.
+        message = "Billing returned from Stripe, but the app could not sync the trial automatically. Contact support or manually activate the guild in Site Admin."
+        try:
+            record_payment_event(conn, None, "billing.success.error", "error", None, "GBP", str(e), "", "", "")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    finally:
+        conn.close()
 
     return HTMLResponse(f"""
         <html><body style="font-family:Segoe UI;padding:40px;">
@@ -1352,8 +1431,7 @@ def billing_success(request: Request, session_id: str = ""):
         <p><a href="/guild/login">Log in to your guild</a></p>
         <p><a href="/">Return to LM Guild Manager</a></p>
         </body></html>
-    """, status_code=status_code)
-
+    """, status_code=200)
 
 @app.get("/billing/cancel")
 def billing_cancel(request: Request):
@@ -1468,7 +1546,7 @@ async def stripe_webhook(request: Request):
                 )
                 record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event_id, "", sub.get("id") or "")
 
-        elif event_type == "invoice.paid":
+        elif event_type in ("invoice.paid", "invoice.payment_succeeded"):
             invoice = stripe_to_dict(data)
             guild_id = find_guild_id_from_stripe_object(conn, invoice)
             if guild_id:
@@ -1504,6 +1582,7 @@ async def stripe_webhook(request: Request):
         conn.commit()
     except Exception as e:
         conn.rollback()
+        print(f"Stripe webhook sync error for {event_type}: {e}")
         # Return 200 so Stripe does not keep retrying a webhook that has already reached the app.
         try:
             record_payment_event(conn, None, event_type or "webhook.error", "error", None, "GBP", str(e), event_id, "", "")
