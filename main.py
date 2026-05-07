@@ -361,11 +361,17 @@ def guild_billing_allowed(guild):
 
 
 def record_payment_event(conn, guild_id, event_type, status="", amount=None, currency="", description="", stripe_event_id="", stripe_invoice_id="", stripe_subscription_id=""):
-    conn.execute("""
+    """Record billing history without ever blocking guild activation.
+
+    Older Render SQLite databases may have an older guild_payment_events schema.
+    This function adds missing columns on demand, then retries once.
+    """
+    insert_sql = """
         INSERT INTO guild_payment_events
         (guild_id, event_type, status, amount, currency, description, stripe_event_id, stripe_invoice_id, stripe_subscription_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
+    """
+    values = (
         guild_id,
         event_type,
         status or "",
@@ -376,7 +382,31 @@ def record_payment_event(conn, guild_id, event_type, status="", amount=None, cur
         stripe_invoice_id or "",
         stripe_subscription_id or "",
         now_sql(),
-    ))
+    )
+    try:
+        conn.execute(insert_sql, values)
+    except sqlite3.OperationalError as e:
+        if "no column named" not in str(e):
+            print(f"PAYMENT_EVENT_RECORD_ERROR: {e!r}")
+            return
+        for col, definition in {
+            "guild_id": "INTEGER",
+            "event_type": "TEXT",
+            "status": "TEXT",
+            "amount": "INTEGER",
+            "currency": "TEXT",
+            "description": "TEXT",
+            "stripe_event_id": "TEXT",
+            "stripe_invoice_id": "TEXT",
+            "stripe_subscription_id": "TEXT",
+            "created_at": "TEXT",
+        }.items():
+            if not column_exists(conn, "guild_payment_events", col):
+                conn.execute(f"ALTER TABLE guild_payment_events ADD COLUMN {col} {definition}")
+        try:
+            conn.execute(insert_sql, values)
+        except Exception as retry_error:
+            print(f"PAYMENT_EVENT_RECORD_RETRY_ERROR: {retry_error!r}")
 
 
 async def guild_billing_guard(request: Request, call_next):
@@ -485,6 +515,24 @@ def init_db():
             created_at TEXT
         )
     """)
+
+    # Self-migrate older Render databases where guild_payment_events already existed
+    # before the Stripe invoice/subscription columns were added.
+    for col, definition in {
+        "guild_id": "INTEGER",
+        "event_type": "TEXT",
+        "status": "TEXT",
+        "amount": "INTEGER",
+        "currency": "TEXT",
+        "description": "TEXT",
+        "stripe_event_id": "TEXT",
+        "stripe_invoice_id": "TEXT",
+        "stripe_subscription_id": "TEXT",
+        "created_at": "TEXT",
+    }.items():
+        if not column_exists(conn, "guild_payment_events", col):
+            c.execute(f"ALTER TABLE guild_payment_events ADD COLUMN {col} {definition}")
+
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS members (
