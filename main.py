@@ -1639,6 +1639,7 @@ def dashboard_view(
     watchlist_summary = []
     watchlist_recommendations = []
     dashboard_insights = {}
+    billing = None
 
     if is_admin(request):
         c.execute("SELECT igg_id, name FROM members WHERE guild_id = ? AND COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)", (guild_id,))
@@ -1648,6 +1649,26 @@ def dashboard_view(
 
         watchlist_recommendations = get_watchlist_recommendations(conn, guild_id)
         dashboard_insights = get_dashboard_insights(conn, guild_id)
+
+        guild = c.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
+        if guild:
+            plan = get_billing_plan(guild["stripe_plan"] or "monthly")
+            last_payment_amount = guild["last_payment_amount"] or 0
+            billing = {
+                "plan": plan["label"],
+                "price": plan["display_price"],
+                "status": billing_status_label(guild["subscription_status"], guild["manual_access"]),
+                "status_raw": guild["subscription_status"] or "not_started",
+                "manual": int(guild["manual_access"] or 0) == 1,
+                "trial_ends_at": guild["trial_ends_at"] or "",
+                "current_period_end": guild["current_period_end"] or "",
+                "last_payment_at": guild["last_payment_at"] or "",
+                "last_payment_amount": last_payment_amount,
+                "last_payment_currency": (guild["last_payment_currency"] or "GBP").upper(),
+                "last_payment_display": f"£{last_payment_amount / 100:.2f}" if last_payment_amount else "No payment yet",
+                "manage_url": "/billing/portal" if guild["stripe_customer_id"] else f"/billing/checkout/{guild_id}",
+                "manage_label": "Manage Billing" if guild["stripe_customer_id"] else "Complete Billing Setup",
+            }
 
     conn.close()
 
@@ -1670,7 +1691,8 @@ def dashboard_view(
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
         "guild_tag": current_guild_tag(request),
-        "is_admin": admin_view
+        "is_admin": admin_view,
+        "billing": billing
     })
 
 
