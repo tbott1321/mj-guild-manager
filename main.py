@@ -1215,9 +1215,11 @@ async def stripe_webhook(request: Request):
     elif not isinstance(event, dict):
         event = {}
 
-    event_type = event.get("type", "")
-    event_id = event.get("id", "")
-    data = event.get("data", {}).get("object", {})
+    event_dict = event.to_dict_recursive() if hasattr(event, "to_dict_recursive") else event
+
+    event_type = event_dict.get("type", "")
+    event_id = event_dict.get("id", "")
+    data = event_dict.get("data", {}).get("object", {})
 
     def stripe_safe_dict(obj):
         if hasattr(obj, "to_dict_recursive"):
