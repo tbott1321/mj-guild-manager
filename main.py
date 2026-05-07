@@ -1216,7 +1216,7 @@ async def stripe_webhook(request: Request):
         event = {}
 
     event_type = event.get("type", "")
-    event_id = event_id
+    event_id = event.get("id", "")
     data = event.get("data", {}).get("object", {})
 
     def stripe_safe_dict(obj):
