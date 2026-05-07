@@ -433,6 +433,7 @@ def init_db():
         "billing_email": "TEXT",
         "stripe_customer_id": "TEXT",
         "stripe_subscription_id": "TEXT",
+        "stripe_checkout_session_id": "TEXT",
         "stripe_price_id": "TEXT",
         "subscription_status": "TEXT DEFAULT 'not_started'",
         "trial_ends_at": "TEXT",
@@ -1290,10 +1291,11 @@ def billing_checkout(request: Request, guild_id: int):
         conn.execute("""
             UPDATE guilds
             SET subscription_status = 'pending_billing',
+                stripe_checkout_session_id = ?,
                 stripe_price_id = ?,
                 updated_at = ?
             WHERE id = ?
-        """, (price_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
+        """, (checkout_session.id, price_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
         conn.commit()
         conn.close()
         return RedirectResponse(url=checkout_session.url, status_code=303)
@@ -1350,6 +1352,17 @@ def billing_success(request: Request, session_id: str = ""):
                     guild_id = int(pending_id)
                 except (TypeError, ValueError):
                     guild_id = None
+
+        # Extra fallback: match the exact Checkout Session ID that this app
+        # stored before sending the user to Stripe. This covers Stripe API/event
+        # payload differences where metadata is not returned as expected.
+        if not guild_id:
+            row = conn.execute(
+                "SELECT id FROM guilds WHERE stripe_checkout_session_id = ? ORDER BY id DESC LIMIT 1",
+                (session_id,)
+            ).fetchone()
+            if row:
+                guild_id = int(row["id"])
 
         customer_id = session_dict.get("customer") or ""
         subscription_id = session_dict.get("subscription") or ""
@@ -1413,14 +1426,40 @@ def billing_success(request: Request, session_id: str = ""):
 
     except Exception as e:
         conn.rollback()
-        # Do not show a 500 after payment. Log the error in payment history if we
-        # can, and let the user reach login/support instead of an error page.
-        message = "Billing returned from Stripe, but the app could not sync the trial automatically. Contact support or manually activate the guild in Site Admin."
+        print(f"BILLING_SUCCESS_ERROR session_id={session_id}: {repr(e)}")
+
+        # Final safety net: if this checkout session was created by this app and
+        # stored in SQLite before redirecting to Stripe, activate the trial from
+        # the stored session id even if Stripe retrieval/conversion failed.
         try:
-            record_payment_event(conn, None, "billing.success.error", "error", None, "GBP", str(e), "", "", "")
-            conn.commit()
-        except Exception:
+            row = conn.execute(
+                "SELECT id FROM guilds WHERE stripe_checkout_session_id = ? ORDER BY id DESC LIMIT 1",
+                (session_id,)
+            ).fetchone()
+            if row:
+                guild_id = int(row["id"])
+                conn.execute("""
+                    UPDATE guilds
+                    SET subscription_status = 'trialing',
+                        trial_ends_at = COALESCE(trial_ends_at, ?),
+                        updated_at = ?
+                    WHERE id = ?
+                """, (
+                    (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S"),
+                    now_sql(),
+                    guild_id,
+                ))
+                record_payment_event(conn, guild_id, "billing.success.fallback", "trialing", None, "GBP", f"Fallback trial activation from stored checkout session. Original error: {e}", "", "", "")
+                conn.commit()
+                message = "Your guild trial is active. You can now log in to your guild."
+            else:
+                record_payment_event(conn, None, "billing.success.error", "error", None, "GBP", str(e), "", "", "")
+                conn.commit()
+                message = "Billing returned from Stripe, but the app could not sync the trial automatically. Contact support or manually activate the guild in Site Admin."
+        except Exception as fallback_error:
+            print(f"BILLING_SUCCESS_FALLBACK_ERROR session_id={session_id}: {repr(fallback_error)}")
             conn.rollback()
+            message = "Billing returned from Stripe, but the app could not sync the trial automatically. Contact support or manually activate the guild in Site Admin."
     finally:
         conn.close()
 
