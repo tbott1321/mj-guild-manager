@@ -57,12 +57,22 @@
 
     <div class="container">
         <div class="card">
-            <h2>Download Backup</h2>
+            <h2>Database Backup</h2>
             <div class="muted">
-                Download a full backup of your live MJ Guild Manager database.
+                Download a full SQLite <strong>.db</strong> backup of the live MJ Guild Manager database.
             </div>
             <div style="margin-top:16px;">
-                <a class="button" href="/backup/download">Download Backup File</a>
+                <a class="button" href="/backup/download">Download Database Backup</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Excel Export</h2>
+            <div class="muted">
+                Download an Excel workbook containing this guild's scoped tables for review, reporting, or re-import.
+            </div>
+            <div style="margin-top:16px;">
+                <a class="button" href="/data/export-excel">Export to Excel</a>
             </div>
         </div>
 

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form, UploadFile, File, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
@@ -2396,7 +2396,16 @@ def download_backup(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    return RedirectResponse(url="/data/export-excel", status_code=302)
+    if not os.path.exists(DB_PATH):
+        return HTMLResponse("<h2>Database file not found.</h2>", status_code=404)
+
+    filename = f"mj_guild_database_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    return FileResponse(
+        DB_PATH,
+        media_type="application/octet-stream",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 @app.post("/backup/restore")
