@@ -163,6 +163,166 @@ def billing_status_label(status: str, manual_access=0):
     return labels.get(status or "not_started", status or "Not Started")
 
 
+
+
+def now_sql():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def stripe_to_dict(obj):
+    """Safely convert StripeObject/dict-like values into normal dicts."""
+    if obj is None:
+        return {}
+    if hasattr(obj, "to_dict_recursive"):
+        try:
+            return obj.to_dict_recursive()
+        except Exception:
+            pass
+    if isinstance(obj, dict):
+        return obj
+    try:
+        return dict(obj)
+    except Exception:
+        return {}
+
+
+def stripe_nested_get(obj, *keys, default=None):
+    cur = stripe_to_dict(obj)
+    for key in keys:
+        if not isinstance(cur, dict) or key not in cur:
+            return default
+        cur = stripe_to_dict(cur.get(key)) if not isinstance(cur.get(key), (str, int, float, bool, type(None))) else cur.get(key)
+    return cur if cur is not None else default
+
+
+def find_guild_id_from_stripe_object(conn, obj):
+    """Find the owning guild from Stripe metadata, customer id, or subscription id."""
+    obj = stripe_to_dict(obj)
+
+    metadata = stripe_to_dict(obj.get("metadata"))
+    guild_id = metadata.get("guild_id")
+    if guild_id:
+        try:
+            return int(guild_id)
+        except (TypeError, ValueError):
+            pass
+
+    # Some invoice events place subscription metadata under subscription_details.metadata.
+    sub_details_meta = stripe_to_dict(stripe_nested_get(obj, "subscription_details", "metadata", default={}))
+    guild_id = sub_details_meta.get("guild_id")
+    if guild_id:
+        try:
+            return int(guild_id)
+        except (TypeError, ValueError):
+            pass
+
+    client_reference_id = obj.get("client_reference_id")
+    if client_reference_id:
+        try:
+            return int(client_reference_id)
+        except (TypeError, ValueError):
+            pass
+
+    customer_id = obj.get("customer")
+    if customer_id:
+        row = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
+        if row:
+            return int(row["id"])
+
+    subscription_id = obj.get("subscription") or obj.get("id")
+    if subscription_id:
+        row = conn.execute("SELECT id FROM guilds WHERE stripe_subscription_id = ?", (subscription_id,)).fetchone()
+        if row:
+            return int(row["id"])
+
+    return None
+
+
+def sync_guild_subscription(
+    conn,
+    guild_id: int,
+    *,
+    customer_id: str = "",
+    subscription_id: str = "",
+    status: str = "trialing",
+    trial_end=None,
+    current_period_end=None,
+    price_id: str = "",
+):
+    """Persist Stripe subscription state and keep trial/active guilds login-enabled."""
+    allowed_or_known = {
+        "trialing", "active", "past_due", "unpaid", "canceled",
+        "incomplete", "incomplete_expired", "paused"
+    }
+    clean_status = (status or "").strip() or "trialing"
+    if clean_status not in allowed_or_known:
+        clean_status = "trialing"
+
+    conn.execute("""
+        UPDATE guilds
+        SET stripe_customer_id = COALESCE(NULLIF(?, ''), stripe_customer_id),
+            stripe_subscription_id = COALESCE(NULLIF(?, ''), stripe_subscription_id),
+            stripe_price_id = COALESCE(NULLIF(?, ''), stripe_price_id),
+            subscription_status = ?,
+            trial_ends_at = COALESCE(NULLIF(?, ''), trial_ends_at),
+            current_period_end = COALESCE(NULLIF(?, ''), current_period_end),
+            manual_access = COALESCE(manual_access, 0),
+            updated_at = ?
+        WHERE id = ?
+    """, (
+        customer_id or "",
+        subscription_id or "",
+        price_id or "",
+        clean_status,
+        dt_from_unix(trial_end) or "",
+        dt_from_unix(current_period_end) or "",
+        now_sql(),
+        int(guild_id),
+    ))
+
+
+def sync_guild_from_checkout_session(conn, session_obj):
+    """Update a guild after checkout.session.completed or /billing/success."""
+    session = stripe_to_dict(session_obj)
+    guild_id = find_guild_id_from_stripe_object(conn, session)
+    if not guild_id:
+        return None, "No guild_id found on Stripe session."
+
+    customer_id = session.get("customer") or ""
+    subscription_id = session.get("subscription") or ""
+    status = "trialing"
+    trial_end = None
+    current_period_end = None
+    price_id = ""
+
+    if subscription_id and STRIPE_SECRET_KEY:
+        try:
+            sub = stripe.Subscription.retrieve(subscription_id)
+            sub = stripe_to_dict(sub)
+            status = sub.get("status") or status
+            trial_end = sub.get("trial_end")
+            current_period_end = sub.get("current_period_end")
+            customer_id = sub.get("customer") or customer_id
+            items = stripe_nested_get(sub, "items", "data", default=[])
+            if isinstance(items, list) and items:
+                price = stripe_to_dict(stripe_to_dict(items[0]).get("price"))
+                price_id = price.get("id") or ""
+        except Exception:
+            # Keep the guild usable immediately; the webhook will fill exact dates/status.
+            status = "trialing"
+
+    sync_guild_subscription(
+        conn,
+        int(guild_id),
+        customer_id=customer_id,
+        subscription_id=subscription_id,
+        status=status,
+        trial_end=trial_end,
+        current_period_end=current_period_end,
+        price_id=price_id,
+    )
+    return int(guild_id), status
+
 def guild_billing_allowed(guild):
     if not guild:
         return False, "Guild not found."
@@ -196,7 +356,7 @@ def record_payment_event(conn, guild_id, event_type, status="", amount=None, cur
         stripe_event_id or "",
         stripe_invoice_id or "",
         stripe_subscription_id or "",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        now_sql(),
     ))
 
 
@@ -629,6 +789,7 @@ def create_current_roster_snapshot(guild_id: int, snapshot_name=None, source_fil
             (guild_id, snapshot_id, igg_id, player_name, rank, might, kills, edm)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            guild_id,
             snapshot_id,
             member["igg_id"],
             member["name"],
@@ -1115,6 +1276,7 @@ def billing_checkout(request: Request, guild_id: int):
         checkout_session = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
+            client_reference_id=str(guild_id),
             line_items=[{"price": price_id, "quantity": 1}],
             success_url=f"{PUBLIC_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{PUBLIC_BASE_URL}/billing/cancel",
@@ -1143,42 +1305,54 @@ def billing_checkout(request: Request, guild_id: int):
 
 @app.get("/billing/success")
 def billing_success(request: Request, session_id: str = ""):
-    if session_id and STRIPE_SECRET_KEY:
+    message = "Your guild trial is active. You can now log in to your guild."
+    status_code = 200
+
+    if not session_id:
+        message = "Billing returned successfully, but no Stripe session id was supplied. If login is blocked, contact support."
+        status_code = 400
+    elif not STRIPE_SECRET_KEY:
+        message = "Stripe is not configured on the server. STRIPE_SECRET_KEY is missing."
+        status_code = 500
+    else:
+        conn = get_conn()
         try:
             session = stripe.checkout.Session.retrieve(session_id)
-            session_data = session.to_dict_recursive() if hasattr(session, "to_dict_recursive") else session
-
-            guild_id = session_data.get("metadata", {}).get("guild_id")
-            customer_id = session_data.get("customer")
-            subscription_id = session_data.get("subscription")
-
+            guild_id, sync_status = sync_guild_from_checkout_session(conn, session)
             if guild_id:
-                conn = get_conn()
-                conn.execute("""
-                    UPDATE guilds
-                    SET stripe_customer_id = ?,
-                        stripe_subscription_id = ?,
-                        subscription_status = 'trialing',
-                        updated_at = ?
-                    WHERE id = ?
-                """, (
-                    customer_id,
-                    subscription_id,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    int(guild_id)
-                ))
+                request.session.pop("pending_guild_id", None)
+                record_payment_event(
+                    conn,
+                    guild_id,
+                    "billing.success",
+                    sync_status or "trialing",
+                    None,
+                    "GBP",
+                    "Checkout success page synced guild billing",
+                    "",
+                    "",
+                    stripe_to_dict(session).get("subscription") or "",
+                )
                 conn.commit()
-                conn.close()
-        except Exception:
-            pass
+            else:
+                conn.rollback()
+                message = f"Billing succeeded, but the guild could not be matched: {sync_status}"
+                status_code = 500
+        except Exception as e:
+            conn.rollback()
+            message = f"Billing succeeded, but the server could not sync the Stripe session: {str(e)}"
+            status_code = 500
+        finally:
+            conn.close()
 
-    return HTMLResponse("""
+    return HTMLResponse(f"""
         <html><body style="font-family:Segoe UI;padding:40px;">
         <h1>Billing setup successful</h1>
-        <p>Your guild billing is active. You can now return and log in to your guild.</p>
+        <p>{message}</p>
+        <p><a href="/guild/login">Log in to your guild</a></p>
         <p><a href="/">Return to LM Guild Manager</a></p>
         </body></html>
-    """)
+    """, status_code=status_code)
 
 
 @app.get("/billing/cancel")
@@ -1234,153 +1408,113 @@ async def stripe_webhook(request: Request):
     except Exception:
         return HTMLResponse("Invalid webhook", status_code=400)
 
-    # Stripe returns StripeObject instances, not normal dicts.
-    # Convert event and nested objects to plain dicts before using .get().
-    if hasattr(event, "to_dict_recursive"):
-        event = event.to_dict_recursive()
-    elif hasattr(event, "_data"):
-        event = event._data
-    elif not isinstance(event, dict):
-        event = {}
-
-    def stripe_safe_dict(obj):
-        if hasattr(obj, "to_dict_recursive"):
-            return obj.to_dict_recursive()
-        if isinstance(obj, dict):
-            return obj
-        try:
-            return dict(obj)
-        except Exception:
-            return {}
-
-    event_dict = stripe_safe_dict(event)
-
+    event_dict = stripe_to_dict(event)
     event_type = event_dict.get("type", "")
     event_id = event_dict.get("id", "")
-    event_data = stripe_safe_dict(event_dict.get("data", {}))
-    data = stripe_safe_dict(event_data.get("object", {}))
+    data = stripe_to_dict(stripe_nested_get(event_dict, "data", "object", default={}))
 
     conn = get_conn()
-
-    def get_event_guild_id(obj):
-        obj = stripe_safe_dict(obj)
-
-        meta = obj.get("metadata") or {}
-        if hasattr(meta, "to_dict_recursive"):
-            meta = meta.to_dict_recursive()
-        if isinstance(meta, dict):
-            gid = meta.get("guild_id")
-            if gid:
-                return int(gid)
-
-        customer_id = obj.get("customer")
-        if customer_id:
-            row = conn.execute(
-                "SELECT id FROM guilds WHERE stripe_customer_id = ?",
-                (customer_id,)
-            ).fetchone()
-            if row:
-                return int(row["id"])
-
-        subscription_id = obj.get("subscription") or obj.get("id")
-        if subscription_id:
-            row = conn.execute(
-                "SELECT id FROM guilds WHERE stripe_subscription_id = ?",
-                (subscription_id,)
-            ).fetchone()
-            if row:
-                return int(row["id"])
-
-        return None
-
     try:
         if event_type == "checkout.session.completed":
-            guild_id = get_event_guild_id(data)
+            guild_id, sync_status = sync_guild_from_checkout_session(conn, data)
             if guild_id:
-                subscription_id = data.get("subscription")
-                customer_id = data.get("customer")
-                conn.execute("""
-                    UPDATE guilds
-                    SET stripe_customer_id = ?,
-                        stripe_subscription_id = ?,
-                        subscription_status = 'trialing',
-                        updated_at = ?
-                    WHERE id = ?
-                """, (customer_id, subscription_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
-                record_payment_event(conn, int(guild_id), event_type, "trialing", None, "GBP", "Checkout completed", event_id, "", subscription_id or "")
+                record_payment_event(
+                    conn,
+                    int(guild_id),
+                    event_type,
+                    sync_status or "trialing",
+                    None,
+                    "GBP",
+                    "Checkout completed and trial started",
+                    event_id,
+                    "",
+                    data.get("subscription") or "",
+                )
 
         elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
-            sub = stripe_safe_dict(data)
-            guild_id = get_event_guild_id(sub)
+            sub = stripe_to_dict(data)
+            guild_id = find_guild_id_from_stripe_object(conn, sub)
             if guild_id:
-                status = sub.get("status") or ""
-                conn.execute("""
-                    UPDATE guilds
-                    SET stripe_subscription_id = ?,
-                        subscription_status = ?,
-                        trial_ends_at = ?,
-                        current_period_end = ?,
-                        updated_at = ?
-                    WHERE id = ?
-                """, (
-                    sub.get("id"),
-                    status,
-                    dt_from_unix(sub.get("trial_end")),
-                    dt_from_unix(sub.get("current_period_end")),
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    int(guild_id)
-                ))
-                record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription updated", event_id, "", sub.get("id") or "")
+                status = sub.get("status") or "trialing"
+                price_id = ""
+                items = stripe_nested_get(sub, "items", "data", default=[])
+                if isinstance(items, list) and items:
+                    price = stripe_to_dict(stripe_to_dict(items[0]).get("price"))
+                    price_id = price.get("id") or ""
+                sync_guild_subscription(
+                    conn,
+                    int(guild_id),
+                    customer_id=sub.get("customer") or "",
+                    subscription_id=sub.get("id") or "",
+                    status=status,
+                    trial_end=sub.get("trial_end"),
+                    current_period_end=sub.get("current_period_end"),
+                    price_id=price_id,
+                )
+                record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription synced", event_id, "", sub.get("id") or "")
 
         elif event_type == "customer.subscription.deleted":
-            sub = stripe_safe_dict(data)
-            guild_id = get_event_guild_id(sub)
+            sub = stripe_to_dict(data)
+            guild_id = find_guild_id_from_stripe_object(conn, sub)
             if guild_id:
-                conn.execute("""
-                    UPDATE guilds
-                    SET subscription_status = 'canceled',
-                        current_period_end = ?,
-                        updated_at = ?
-                    WHERE id = ?
-                """, (dt_from_unix(sub.get("current_period_end")), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
+                sync_guild_subscription(
+                    conn,
+                    int(guild_id),
+                    customer_id=sub.get("customer") or "",
+                    subscription_id=sub.get("id") or "",
+                    status="canceled",
+                    trial_end=sub.get("trial_end"),
+                    current_period_end=sub.get("current_period_end"),
+                )
                 record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event_id, "", sub.get("id") or "")
 
         elif event_type == "invoice.paid":
-            invoice = stripe_safe_dict(data)
-            customer_id = invoice.get("customer")
-            guild = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
-            if guild:
+            invoice = stripe_to_dict(data)
+            guild_id = find_guild_id_from_stripe_object(conn, invoice)
+            if guild_id:
                 amount = invoice.get("amount_paid")
                 currency = invoice.get("currency") or "GBP"
+                subscription_id = invoice.get("subscription") or ""
+                # Keep zero-value trial invoices as trialing; paid renewal invoices become active.
+                new_status = "active" if int(amount or 0) > 0 else "trialing"
                 conn.execute("""
                     UPDATE guilds
-                    SET subscription_status = 'active',
+                    SET stripe_subscription_id = COALESCE(NULLIF(?, ''), stripe_subscription_id),
+                        subscription_status = ?,
                         last_payment_at = ?,
                         last_payment_amount = ?,
                         last_payment_currency = ?,
                         updated_at = ?
                     WHERE id = ?
-                """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), amount, currency.upper(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
-                record_payment_event(conn, guild["id"], event_type, "paid", amount, currency, "Invoice paid", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
+                """, (subscription_id, new_status, now_sql(), amount, currency.upper(), now_sql(), int(guild_id)))
+                record_payment_event(conn, int(guild_id), event_type, "paid", amount, currency, "Invoice paid", event_id, invoice.get("id") or "", subscription_id)
 
         elif event_type == "invoice.payment_failed":
-            invoice = stripe_safe_dict(data)
-            customer_id = invoice.get("customer")
-            guild = conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
-            if guild:
+            invoice = stripe_to_dict(data)
+            guild_id = find_guild_id_from_stripe_object(conn, invoice)
+            if guild_id:
                 conn.execute("""
                     UPDATE guilds
                     SET subscription_status = 'past_due',
                         updated_at = ?
                     WHERE id = ?
-                """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
-                record_payment_event(conn, guild["id"], event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
+                """, (now_sql(), int(guild_id)))
+                record_payment_event(conn, int(guild_id), event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
 
         conn.commit()
+    except Exception as e:
+        conn.rollback()
+        # Return 200 so Stripe does not keep retrying a webhook that has already reached the app.
+        try:
+            record_payment_event(conn, None, event_type or "webhook.error", "error", None, "GBP", str(e), event_id, "", "")
+            conn.commit()
+        except Exception:
+            conn.rollback()
     finally:
         conn.close()
 
     return {"status": "success"}
+
 
 
 
@@ -1638,7 +1772,6 @@ def dashboard_view(
     watchlist_summary = []
     watchlist_recommendations = []
     dashboard_insights = {}
-    billing = None
 
     if is_admin(request):
         c.execute("SELECT igg_id, name FROM members WHERE guild_id = ? AND COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)", (guild_id,))
@@ -1648,26 +1781,6 @@ def dashboard_view(
 
         watchlist_recommendations = get_watchlist_recommendations(conn, guild_id)
         dashboard_insights = get_dashboard_insights(conn, guild_id)
-
-        guild = c.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
-        if guild:
-            plan = get_billing_plan(guild["stripe_plan"] or "monthly")
-            last_payment_amount = guild["last_payment_amount"] or 0
-            billing = {
-                "plan": plan["label"],
-                "price": plan["display_price"],
-                "status": billing_status_label(guild["subscription_status"], guild["manual_access"]),
-                "status_raw": guild["subscription_status"] or "not_started",
-                "manual": int(guild["manual_access"] or 0) == 1,
-                "trial_ends_at": guild["trial_ends_at"] or "",
-                "current_period_end": guild["current_period_end"] or "",
-                "last_payment_at": guild["last_payment_at"] or "",
-                "last_payment_amount": last_payment_amount,
-                "last_payment_currency": (guild["last_payment_currency"] or "GBP").upper(),
-                "last_payment_display": f"£{last_payment_amount / 100:.2f}" if last_payment_amount else "No payment yet",
-                "manage_url": "/billing/portal" if guild["stripe_customer_id"] else f"/billing/checkout/{guild_id}",
-                "manage_label": "Manage Billing" if guild["stripe_customer_id"] else "Complete Billing Setup",
-            }
 
     conn.close()
 
@@ -1690,8 +1803,7 @@ def dashboard_view(
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
         "guild_tag": current_guild_tag(request),
-        "is_admin": admin_view,
-        "billing": billing
+        "is_admin": admin_view
     })
 
 
