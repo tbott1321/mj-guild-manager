@@ -169,6 +169,25 @@ def now_sql():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def billing_success_token(guild_id: int) -> str:
+    """Create a short HMAC token so /billing/success can safely identify the guild.
+
+    Stripe metadata/webhook delivery can vary by event timing, but this token is
+    generated before redirecting to Stripe and validated when the user returns.
+    """
+    secret = os.getenv("SESSION_SECRET", "super-secret-key-change-this")
+    msg = str(int(guild_id)).encode("utf-8")
+    return hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+
+
+def valid_billing_success_token(guild_id, token: str) -> bool:
+    try:
+        expected = billing_success_token(int(guild_id))
+        return hmac.compare_digest(expected, token or "")
+    except Exception:
+        return False
+
+
 def stripe_to_dict(obj):
     """Safely convert StripeObject/dict-like values into normal dicts."""
     if obj is None:
@@ -1279,7 +1298,7 @@ def billing_checkout(request: Request, guild_id: int):
             customer=customer_id,
             client_reference_id=str(guild_id),
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=f"{PUBLIC_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+            success_url=f"{PUBLIC_BASE_URL}/billing/success?guild_id={guild_id}&token={billing_success_token(guild_id)}&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{PUBLIC_BASE_URL}/billing/cancel",
             subscription_data={
                 "trial_period_days": 14,
@@ -1306,7 +1325,7 @@ def billing_checkout(request: Request, guild_id: int):
 
 
 @app.get("/billing/success")
-def billing_success(request: Request, session_id: str = ""):
+def billing_success(request: Request, session_id: str = "", guild_id: int | None = None, token: str = ""):
     """
     Stripe redirects the user here after checkout.
 
@@ -1342,27 +1361,37 @@ def billing_success(request: Request, session_id: str = ""):
         session = stripe.checkout.Session.retrieve(session_id)
         session_dict = stripe_to_dict(session)
 
-        # Prefer Stripe metadata/client_reference_id, then fall back to the
-        # pending guild id stored before redirecting to Stripe.
-        guild_id = find_guild_id_from_stripe_object(conn, session_dict)
-        if not guild_id:
+        # Strongest path: success_url includes a signed guild_id token created
+        # by this app before redirecting to Stripe. This avoids relying on
+        # browser session persistence or Stripe metadata timing.
+        resolved_guild_id = None
+        if guild_id is not None and valid_billing_success_token(guild_id, token):
+            resolved_guild_id = int(guild_id)
+
+        # Prefer Stripe metadata/client_reference_id next.
+        if not resolved_guild_id:
+            resolved_guild_id = find_guild_id_from_stripe_object(conn, session_dict)
+
+        # Then fall back to the pending guild id stored in the user session.
+        if not resolved_guild_id:
             pending_id = request.session.get("pending_guild_id")
             if pending_id:
                 try:
-                    guild_id = int(pending_id)
+                    resolved_guild_id = int(pending_id)
                 except (TypeError, ValueError):
-                    guild_id = None
+                    resolved_guild_id = None
 
         # Extra fallback: match the exact Checkout Session ID that this app
-        # stored before sending the user to Stripe. This covers Stripe API/event
-        # payload differences where metadata is not returned as expected.
-        if not guild_id:
+        # stored before sending the user to Stripe.
+        if not resolved_guild_id:
             row = conn.execute(
                 "SELECT id FROM guilds WHERE stripe_checkout_session_id = ? ORDER BY id DESC LIMIT 1",
                 (session_id,)
             ).fetchone()
             if row:
-                guild_id = int(row["id"])
+                resolved_guild_id = int(row["id"])
+
+        guild_id = resolved_guild_id
 
         customer_id = session_dict.get("customer") or ""
         subscription_id = session_dict.get("subscription") or ""
@@ -1422,6 +1451,7 @@ def billing_success(request: Request, session_id: str = ""):
             request.session.pop("pending_guild_id", None)
         else:
             conn.rollback()
+            print(f"BILLING_SUCCESS_NO_GUILD session_id={session_id} url_guild_id={guild_id} token_ok={valid_billing_success_token(guild_id, token) if guild_id is not None else False} session_metadata={session_dict.get('metadata')} client_reference_id={session_dict.get('client_reference_id')} customer={session_dict.get('customer')} subscription={session_dict.get('subscription')}")
             message = "Billing succeeded, but the guild could not be matched automatically. Contact support or manually activate it in Site Admin."
 
     except Exception as e:
@@ -1432,12 +1462,19 @@ def billing_success(request: Request, session_id: str = ""):
         # stored in SQLite before redirecting to Stripe, activate the trial from
         # the stored session id even if Stripe retrieval/conversion failed.
         try:
-            row = conn.execute(
-                "SELECT id FROM guilds WHERE stripe_checkout_session_id = ? ORDER BY id DESC LIMIT 1",
-                (session_id,)
-            ).fetchone()
-            if row:
-                guild_id = int(row["id"])
+            fallback_guild_id = None
+            if guild_id is not None and valid_billing_success_token(guild_id, token):
+                fallback_guild_id = int(guild_id)
+            if not fallback_guild_id:
+                row = conn.execute(
+                    "SELECT id FROM guilds WHERE stripe_checkout_session_id = ? ORDER BY id DESC LIMIT 1",
+                    (session_id,)
+                ).fetchone()
+                if row:
+                    fallback_guild_id = int(row["id"])
+
+            if fallback_guild_id:
+                guild_id = fallback_guild_id
                 conn.execute("""
                     UPDATE guilds
                     SET subscription_status = 'trialing',
