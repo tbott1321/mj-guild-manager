@@ -1143,11 +1143,39 @@ def billing_checkout(request: Request, guild_id: int):
 
 @app.get("/billing/success")
 def billing_success(request: Request, session_id: str = ""):
-    # Webhook remains the source of truth, but this gives a clean return page.
+    if session_id and STRIPE_SECRET_KEY:
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            session_data = session.to_dict_recursive() if hasattr(session, "to_dict_recursive") else session
+
+            guild_id = session_data.get("metadata", {}).get("guild_id")
+            customer_id = session_data.get("customer")
+            subscription_id = session_data.get("subscription")
+
+            if guild_id:
+                conn = get_conn()
+                conn.execute("""
+                    UPDATE guilds
+                    SET stripe_customer_id = ?,
+                        stripe_subscription_id = ?,
+                        subscription_status = 'trialing',
+                        updated_at = ?
+                    WHERE id = ?
+                """, (
+                    customer_id,
+                    subscription_id,
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    int(guild_id)
+                ))
+                conn.commit()
+                conn.close()
+        except Exception:
+            pass
+
     return HTMLResponse("""
         <html><body style="font-family:Segoe UI;padding:40px;">
         <h1>Billing setup successful</h1>
-        <p>Your guild billing is being activated. You can now return and log in to your guild.</p>
+        <p>Your guild billing is active. You can now return and log in to your guild.</p>
         <p><a href="/">Return to LM Guild Manager</a></p>
         </body></html>
     """)
