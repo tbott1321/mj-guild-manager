@@ -1234,40 +1234,9 @@ async def stripe_webhook(request: Request):
 
     conn = get_conn()
 
-    def get_event_guild_id(obj):
-        obj = stripe_safe_dict(obj)
-
-        meta = obj.get("metadata") or {}
-        if hasattr(meta, "to_dict_recursive"):
-            meta = meta.to_dict_recursive()
-        if isinstance(meta, dict):
-            gid = meta.get("guild_id")
-            if gid:
-                return int(gid)
-
-        customer_id = obj.get("customer")
-        if customer_id:
-            row = conn.execute(
-                "SELECT id FROM guilds WHERE stripe_customer_id = ?",
-                (customer_id,)
-            ).fetchone()
-            if row:
-                return int(row["id"])
-
-        subscription_id = obj.get("subscription") or obj.get("id")
-        if subscription_id:
-            row = conn.execute(
-                "SELECT id FROM guilds WHERE stripe_subscription_id = ?",
-                (subscription_id,)
-            ).fetchone()
-            if row:
-                return int(row["id"])
-
-        return None
-
     try:
         if event_type == "checkout.session.completed":
-            guild_id = get_event_guild_id(data)
+            guild_id = data.get("metadata", {}).get("guild_id")
             if guild_id:
                 subscription_id = data.get("subscription")
                 customer_id = data.get("customer")
@@ -1283,7 +1252,7 @@ async def stripe_webhook(request: Request):
 
         elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
             sub = stripe_safe_dict(data)
-            guild_id = get_event_guild_id(sub)
+            guild_id = sub.get("metadata", {}).get("guild_id")
             if guild_id:
                 status = sub.get("status") or ""
                 conn.execute("""
@@ -1306,7 +1275,7 @@ async def stripe_webhook(request: Request):
 
         elif event_type == "customer.subscription.deleted":
             sub = stripe_safe_dict(data)
-            guild_id = get_event_guild_id(sub)
+            guild_id = sub.get("metadata", {}).get("guild_id")
             if guild_id:
                 conn.execute("""
                     UPDATE guilds
