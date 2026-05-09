@@ -66,25 +66,28 @@
         .stats-box {
             display: grid;
             grid-template-columns:
-                minmax(120px, 0.7fr)
-                minmax(260px, 1.4fr)
-                minmax(250px, 1.35fr)
-                minmax(300px, 1.6fr)
-                minmax(150px, 0.8fr)
-                minmax(120px, 0.7fr)
-                minmax(120px, 0.7fr);
-            gap: 20px;
+                minmax(150px, 0.85fr)
+                minmax(270px, 1.45fr)
+                minmax(260px, 1.35fr)
+                minmax(310px, 1.6fr)
+                minmax(170px, 0.9fr)
+                minmax(150px, 0.75fr)
+                minmax(150px, 0.75fr);
+            gap: 14px;
+            align-items: stretch;
             overflow-x: auto;
+            padding-bottom: 2px;
         }
 
         .stat-card {
             background: #f8fafc;
-            padding: 16px 20px;
+            padding: 18px 18px;
             border-radius: 12px;
-            min-height: 100px;
+            min-height: 108px;
             display: flex;
             flex-direction: column;
             justify-content: center;
+            min-width: 0;
         }
 
         .stat-title {
@@ -94,10 +97,11 @@
         }
 
         .stat-value {
-            font-size: 25px;
+            font-size: clamp(21px, 1.45vw, 25px);
             font-weight: bold;
             line-height: 1.15;
             white-space: nowrap;
+            letter-spacing: -0.02em;
         }
 
 
@@ -109,7 +113,7 @@
             justify-content: flex-start !important;
             gap: 14px;
         }
-        .stat-body { min-width: 0; }
+        .stat-body { min-width: 0; flex: 1; }
         .icon-circle,
         .stat-icon,
         .section-icon,
@@ -464,14 +468,7 @@
 
         @media (max-width: 1100px) {
             .stats-box {
-                grid-template-columns:
-                    minmax(120px, 0.7fr)
-                    minmax(250px, 1.35fr)
-                    minmax(240px, 1.3fr)
-                    minmax(280px, 1.5fr)
-                    minmax(140px, 0.75fr)
-                    minmax(120px, 0.7fr)
-                    minmax(120px, 0.7fr);
+                grid-template-columns: repeat(3, minmax(220px, 1fr));
             }
 
             .billing-box {
@@ -816,15 +813,15 @@
         <div class="report-buttons">
             {% if is_admin %}
                 <a href="/reports/kills/create" class="report-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m14.5 17.5 3 3 3-3-3-3"/><path d="m3 3 7.5 7.5"/><path d="m9 15-6 6"/><path d="M14 4l6 6"/><path d="m20 4-6 6"/><path d="M4 20l6-6"/></svg><span>Create Kill Report</span></a>
-                <a href="/reports/guildfest/create" class="report-btn"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M5 5H3v3a4 4 0 0 0 4 4"/><path d="M19 5h2v3a4 4 0 0 1-4 4"/></svg><span>Create Guild Fest Report</span></a>
+                <a href="/reports/guildfest/create" class="report-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m14.5 17.5 3 3 3-3-3-3"/><path d="m3 3 7.5 7.5"/><path d="m9 15-6 6"/><path d="M14 4l6 6"/><path d="m20 4-6 6"/><path d="M4 20l6-6"/></svg><span>Create Guild Fest Report</span></a>
             {% endif %}
 
             {% if latest_kill_report %}
-                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 15v2"/><path d="M12 9v8"/><path d="M17 12v5"/></svg><span>View Latest Kill Report</span></a>
+                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>View Latest Kill Report</span></a>
             {% endif %}
 
             {% if latest_guild_fest_report %}
-                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 15v2"/><path d="M12 9v8"/><path d="M17 12v5"/></svg><span>View Latest Guild Fest Report</span></a>
+                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>View Latest Guild Fest Report</span></a>
             {% endif %}
         </div>
 
