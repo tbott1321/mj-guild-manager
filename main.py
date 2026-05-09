@@ -1707,6 +1707,7 @@ def dashboard_view(
     watchlist_summary = []
     watchlist_recommendations = []
     dashboard_insights = {}
+    billing = None
 
     if is_admin(request):
         c.execute("SELECT igg_id, name FROM members WHERE guild_id = ? AND COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)", (guild_id,))
@@ -1716,6 +1717,26 @@ def dashboard_view(
 
         watchlist_recommendations = get_watchlist_recommendations(conn, guild_id)
         dashboard_insights = get_dashboard_insights(conn, guild_id)
+
+        guild = c.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
+        if guild:
+            plan = get_billing_plan(guild["stripe_plan"] or "monthly")
+            last_payment_amount = guild["last_payment_amount"] or 0
+            billing = {
+                "plan": plan["label"],
+                "price": plan["display_price"],
+                "status": billing_status_label(guild["subscription_status"], guild["manual_access"]),
+                "status_raw": guild["subscription_status"] or "not_started",
+                "manual": int(guild["manual_access"] or 0) == 1,
+                "trial_ends_at": guild["trial_ends_at"] or "",
+                "current_period_end": guild["current_period_end"] or "",
+                "last_payment_at": guild["last_payment_at"] or "",
+                "last_payment_amount": last_payment_amount,
+                "last_payment_currency": (guild["last_payment_currency"] or "GBP").upper(),
+                "last_payment_display": f"£{last_payment_amount / 100:.2f}" if last_payment_amount else "No payment yet",
+                "manage_url": "/billing/portal" if guild["stripe_customer_id"] else f"/billing/checkout/{guild_id}",
+                "manage_label": "Manage Billing" if guild["stripe_customer_id"] else "Complete Billing Setup",
+            }
 
     conn.close()
 
@@ -1738,7 +1759,8 @@ def dashboard_view(
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
         "guild_tag": current_guild_tag(request),
-        "is_admin": admin_view
+        "is_admin": admin_view,
+        "billing": billing
     })
 
 
@@ -1910,6 +1932,20 @@ def pending_members_page(request: Request):
     })
 
 
+def approve_pending_member_row(c, guild_id: int, pending):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("""
+        INSERT OR REPLACE INTO members
+        (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, alt_account, troop_comp,
+         communication_method, whatsapp_number, discord_username, watchlist_flag, comments, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        guild_id, pending["igg_id"], pending["name"], pending["rank"], pending["might"], pending["kills"], pending["edm"],
+        0, 0, 0, 0, "N/A", "N/A", "", "", 0, "", now, now
+    ))
+    c.execute("DELETE FROM pending_members WHERE id = ? AND guild_id = ?", (pending["id"], guild_id))
+
+
 @app.post("/pending-members/{pending_id}/approve")
 def approve_pending_member(request: Request, pending_id: int):
     if not is_admin(request):
@@ -1941,6 +1977,54 @@ def approve_pending_member(request: Request, pending_id: int):
     conn.commit()
     conn.close()
 
+    return RedirectResponse(url="/pending-members", status_code=302)
+
+
+@app.post("/pending-members/bulk")
+def bulk_pending_members_action(
+    request: Request,
+    action: str = Form(""),
+    selected_ids: list[int] = Form(default=[]),
+    single_approve: str | None = Form(default=None),
+    single_reject: str | None = Form(default=None),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/", status_code=302)
+
+    if single_approve:
+        action = "approve"
+        selected_ids = [int(single_approve)]
+    elif single_reject:
+        action = "reject"
+        selected_ids = [int(single_reject)]
+
+    selected_ids = [int(pid) for pid in selected_ids if str(pid).strip()]
+    if not selected_ids or action not in {"approve", "reject"}:
+        return RedirectResponse(url="/pending-members", status_code=302)
+
+    placeholders = ",".join("?" for _ in selected_ids)
+    conn = get_conn()
+    c = conn.cursor()
+
+    if action == "approve":
+        rows = c.execute(
+            f"SELECT * FROM pending_members WHERE guild_id = ? AND id IN ({placeholders})",
+            [guild_id, *selected_ids]
+        ).fetchall()
+        for pending in rows:
+            approve_pending_member_row(c, guild_id, pending)
+    else:
+        c.execute(
+            f"DELETE FROM pending_members WHERE guild_id = ? AND id IN ({placeholders})",
+            [guild_id, *selected_ids]
+        )
+
+    conn.commit()
+    conn.close()
     return RedirectResponse(url="/pending-members", status_code=302)
 
 

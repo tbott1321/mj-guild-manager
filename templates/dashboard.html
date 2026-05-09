@@ -54,8 +54,7 @@
         .search-box,
         .watchlist-box,
         .insights-box,
-        .recommend-box,
-        .billing-box {
+        .recommend-box {
             background: white;
             padding: 20px;
             border-radius: 12px;
@@ -135,65 +134,6 @@
             color: gray;
             font-size: 14px;
             line-height: 1.6;
-        }
-
-        .billing-grid {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(160px, 1fr));
-            gap: 14px;
-            align-items: stretch;
-        }
-
-        .billing-card {
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 16px;
-            min-height: 95px;
-        }
-
-        .billing-label {
-            color: #6b7280;
-            font-size: 13px;
-            margin-bottom: 8px;
-        }
-
-        .billing-value {
-            font-size: 20px;
-            font-weight: 800;
-            line-height: 1.25;
-        }
-
-        .billing-sub {
-            color: #64748b;
-            font-size: 13px;
-            margin-top: 6px;
-            line-height: 1.4;
-        }
-
-        .billing-pill {
-            display: inline-block;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 800;
-        }
-
-        .billing-ok { background: #dcfce7; color: #166534; }
-        .billing-warn { background: #fef3c7; color: #92400e; }
-        .billing-bad { background: #fee2e2; color: #991b1b; }
-        .billing-info { background: #eef2ff; color: #4338ca; }
-
-        .billing-manage {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            min-height: 95px;
-            background: linear-gradient(135deg, #6366f1, #7c3aed);
-            color: white;
-            border-radius: 12px;
-            text-decoration: none;
-            font-weight: 800;
         }
 
         .insight-grid {
@@ -361,10 +301,6 @@
             .insight-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
-
-            .billing-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
         }
 
         @media (max-width: 768px) {
@@ -414,10 +350,6 @@
             .insight-grid {
                 grid-template-columns: 1fr;
             }
-
-            .billing-grid {
-                grid-template-columns: 1fr;
-            }
         }
     </style>
 </head>
@@ -434,7 +366,6 @@
             <a href="/former-members" class="btn">Former Members</a>
             <a href="/guild-requirements" class="btn">Guild Requirements</a>
             <a href="/snapshots/create" class="btn">Manual Snapshot</a>
-            <a href="/data/export-excel" class="btn">Export Excel</a>
             <a href="/backup" class="btn">Backup / Restore</a>
             <a href="/reports/archive" class="btn">Report Archive</a>
             <a href="/admin/delete-all" class="btn btn-danger">Delete All Players</a>
@@ -542,45 +473,32 @@
     {% if is_admin %}
     
 {% if is_admin and billing %}
-<div class="billing-box">
-    <h2>Billing</h2>
-    <div class="billing-grid">
-        <div class="billing-card">
-            <div class="billing-label">Selected Plan</div>
-            <div class="billing-value">{{ billing.plan }}</div>
-            <div class="billing-sub">{{ billing.price }}</div>
-        </div>
-
-        <div class="billing-card">
-            <div class="billing-label">Billing Status</div>
-            {% if billing.manual %}
-                <span class="billing-pill billing-info">Manual Active</span>
-            {% elif billing.status_raw in ['active', 'trialing'] %}
-                <span class="billing-pill billing-ok">{{ billing.status }}</span>
-            {% elif billing.status_raw in ['pending_billing', 'not_started', '', None] %}
-                <span class="billing-pill billing-warn">{{ billing.status }}</span>
-            {% else %}
-                <span class="billing-pill billing-bad">{{ billing.status }}</span>
-            {% endif %}
-            {% if billing.manual %}
-                <div class="billing-sub">Stripe bypass enabled</div>
-            {% endif %}
-        </div>
-
-        <div class="billing-card">
-            <div class="billing-label">Trial Ends</div>
-            <div class="billing-value">{{ billing.trial_ends_at or "N/A" }}</div>
-            <div class="billing-sub">Shown during trial periods</div>
-        </div>
-
-        <div class="billing-card">
-            <div class="billing-label">Payment / Renewal Date</div>
-            <div class="billing-value">{{ billing.current_period_end or "N/A" }}</div>
-            <div class="billing-sub">Last payment: {{ billing.last_payment_display }}{% if billing.last_payment_at %} on {{ billing.last_payment_at }}{% endif %}</div>
-        </div>
-
-        <a class="billing-manage" href="{{ billing.manage_url }}">{{ billing.manage_label }}</a>
+<div class="stats-box">
+    <div class="stat-card">
+        <div class="stat-title">Plan</div>
+        <div class="stat-value">{{ billing.plan }}</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-title">Status</div>
+        <div class="stat-value">
+            {{ billing.status }}
+            {% if billing.manual %}
+                <span style="color:#f59e0b;">(Manual)</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Trial Ends</div>
+        <div class="stat-value">{{ billing.trial_ends_at or "N/A" }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Next Billing</div>
+        <div class="stat-value">{{ billing.current_period_end or "N/A" }}</div>
+    </div>
+</div>
+
+<div class="report-section">
+    <a href="/billing/portal" class="report-btn">Manage Billing</a>
 </div>
 {% endif %}
 
