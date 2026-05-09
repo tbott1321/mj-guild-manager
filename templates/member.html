@@ -223,6 +223,13 @@
                         <div class="value">{{ member.name }}</div>
                     </div>
 
+                    {% if is_admin %}
+                    <div class="stat">
+                        <div class="label">User ID</div>
+                        <div class="value">{{ member.igg_id }}</div>
+                    </div>
+                    {% endif %}
+
                     <div class="stat">
                         <div class="label">Rank</div>
                         <div class="value">{{ member.rank }}</div>
