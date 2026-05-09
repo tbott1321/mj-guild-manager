@@ -54,7 +54,8 @@
         .search-box,
         .watchlist-box,
         .insights-box,
-        .recommend-box {
+        .recommend-box,
+        .billing-box {
             background: white;
             padding: 20px;
             border-radius: 12px;
@@ -134,6 +135,92 @@
             color: gray;
             font-size: 14px;
             line-height: 1.6;
+        }
+
+        .billing-box {
+            padding: 26px 22px;
+        }
+
+        .billing-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0;
+            align-items: stretch;
+        }
+
+        .billing-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-height: 96px;
+            padding: 10px 22px;
+            border-right: 1px solid #e5e7eb;
+            min-width: 0;
+        }
+
+        .billing-item:last-child {
+            border-right: none;
+        }
+
+        .billing-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 56px;
+            font-size: 24px;
+            background: #eef2ff;
+        }
+
+        .billing-icon.plan { background: #f3e8ff; }
+        .billing-icon.status { background: #dcfce7; }
+        .billing-icon.trial { background: #dbeafe; }
+        .billing-icon.period { background: #ede9fe; }
+        .billing-icon.manage { background: #d1fae5; }
+
+        .billing-content {
+            min-width: 0;
+        }
+
+        .billing-label {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .billing-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #020617;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .billing-value.status-text {
+            font-size: 22px;
+        }
+
+        .billing-manual {
+            color: #f59e0b;
+            display: block;
+            margin-top: 3px;
+            font-size: 18px;
+        }
+
+        .billing-manage-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #312e81;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 800;
+            padding: 13px 18px;
+            min-width: 155px;
+            box-shadow: 0 4px 10px rgba(49, 46, 129, 0.18);
         }
 
         .insight-grid {
@@ -286,6 +373,19 @@
             display: none;
         }
 
+        @media (max-width: 1250px) {
+            .billing-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px;
+            }
+
+            .billing-item {
+                border-right: none;
+                background: #f8fafc;
+                border-radius: 12px;
+            }
+        }
+
         @media (max-width: 1100px) {
             .stats-box {
                 grid-template-columns:
@@ -298,7 +398,93 @@
                     minmax(120px, 0.7fr);
             }
 
-            .insight-grid {
+            .billing-box {
+            padding: 26px 22px;
+        }
+
+        .billing-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0;
+            align-items: stretch;
+        }
+
+        .billing-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-height: 96px;
+            padding: 10px 22px;
+            border-right: 1px solid #e5e7eb;
+            min-width: 0;
+        }
+
+        .billing-item:last-child {
+            border-right: none;
+        }
+
+        .billing-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 56px;
+            font-size: 24px;
+            background: #eef2ff;
+        }
+
+        .billing-icon.plan { background: #f3e8ff; }
+        .billing-icon.status { background: #dcfce7; }
+        .billing-icon.trial { background: #dbeafe; }
+        .billing-icon.period { background: #ede9fe; }
+        .billing-icon.manage { background: #d1fae5; }
+
+        .billing-content {
+            min-width: 0;
+        }
+
+        .billing-label {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .billing-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #020617;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .billing-value.status-text {
+            font-size: 22px;
+        }
+
+        .billing-manual {
+            color: #f59e0b;
+            display: block;
+            margin-top: 3px;
+            font-size: 18px;
+        }
+
+        .billing-manage-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #312e81;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 800;
+            padding: 13px 18px;
+            min-width: 155px;
+            box-shadow: 0 4px 10px rgba(49, 46, 129, 0.18);
+        }
+
+        .insight-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
@@ -347,8 +533,113 @@
                 box-sizing: border-box;
             }
 
-            .insight-grid {
+            .billing-box {
+            padding: 26px 22px;
+        }
+
+        .billing-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0;
+            align-items: stretch;
+        }
+
+        .billing-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-height: 96px;
+            padding: 10px 22px;
+            border-right: 1px solid #e5e7eb;
+            min-width: 0;
+        }
+
+        .billing-item:last-child {
+            border-right: none;
+        }
+
+        .billing-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 56px;
+            font-size: 24px;
+            background: #eef2ff;
+        }
+
+        .billing-icon.plan { background: #f3e8ff; }
+        .billing-icon.status { background: #dcfce7; }
+        .billing-icon.trial { background: #dbeafe; }
+        .billing-icon.period { background: #ede9fe; }
+        .billing-icon.manage { background: #d1fae5; }
+
+        .billing-content {
+            min-width: 0;
+        }
+
+        .billing-label {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .billing-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #020617;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .billing-value.status-text {
+            font-size: 22px;
+        }
+
+        .billing-manual {
+            color: #f59e0b;
+            display: block;
+            margin-top: 3px;
+            font-size: 18px;
+        }
+
+        .billing-manage-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #312e81;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 800;
+            padding: 13px 18px;
+            min-width: 155px;
+            box-shadow: 0 4px 10px rgba(49, 46, 129, 0.18);
+        }
+
+        .insight-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .billing-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .billing-item {
+                padding: 14px;
+            }
+
+            .billing-value {
+                font-size: 22px;
+            }
+
+            .billing-manage-btn {
+                width: 100%;
+                box-sizing: border-box;
             }
         }
     </style>
@@ -473,32 +764,53 @@
     {% if is_admin %}
     
 {% if is_admin and billing %}
-<div class="stats-box">
-    <div class="stat-card">
-        <div class="stat-title">Plan</div>
-        <div class="stat-value">{{ billing.plan }}</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-title">Status</div>
-        <div class="stat-value">
-            {{ billing.status }}
-            {% if billing.manual %}
-                <span style="color:#f59e0b;">(Manual)</span>
-            {% endif %}
+<div class="billing-box">
+    <div class="billing-grid">
+        <div class="billing-item">
+            <div class="billing-icon plan">📅</div>
+            <div class="billing-content">
+                <div class="billing-label">Plan</div>
+                <div class="billing-value">{{ billing.plan }}</div>
+            </div>
+        </div>
+
+        <div class="billing-item">
+            <div class="billing-icon status">✅</div>
+            <div class="billing-content">
+                <div class="billing-label">Status</div>
+                <div class="billing-value status-text">
+                    {{ billing.status }}
+                    {% if billing.manual %}
+                        <span class="billing-manual">Manual Access</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="billing-item">
+            <div class="billing-icon trial">🕘</div>
+            <div class="billing-content">
+                <div class="billing-label">Trial Ends</div>
+                <div class="billing-value">{{ billing.trial_ends_at or "N/A" }}</div>
+            </div>
+        </div>
+
+        <div class="billing-item">
+            <div class="billing-icon period">💳</div>
+            <div class="billing-content">
+                <div class="billing-label">Next Billing</div>
+                <div class="billing-value">{{ billing.current_period_end or "N/A" }}</div>
+            </div>
+        </div>
+
+        <div class="billing-item">
+            <div class="billing-icon manage">⚙️</div>
+            <div class="billing-content">
+                <div class="billing-label">Manage Billing</div>
+                <a href="/billing/portal" class="billing-manage-btn">Manage Billing</a>
+            </div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-title">Trial Ends</div>
-        <div class="stat-value">{{ billing.trial_ends_at or "N/A" }}</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-title">Next Billing</div>
-        <div class="stat-value">{{ billing.current_period_end or "N/A" }}</div>
-    </div>
-</div>
-
-<div class="report-section">
-    <a href="/billing/portal" class="report-btn">Manage Billing</a>
 </div>
 {% endif %}
 
