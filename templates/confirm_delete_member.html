@@ -3,139 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delete Player</title>
+    <title>Remove Player</title>
 
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
-
-        body {
-            margin: 0;
-            background: #f3f4f6;
-            color: #111827;
-        }
-
-        .topbar {
-            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
-            color: white;
-            padding: 22px 28px;
-        }
-
-        .topbar-inner {
-            max-width: 900px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .title {
-            font-size: 28px;
-            font-weight: 700;
-        }
-
-        .back {
-            text-decoration: none;
-            color: white;
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.15);
-            padding: 10px 16px;
-            border-radius: 12px;
-            font-weight: 600;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 24px auto;
-            padding: 0 20px 24px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 10px 24px rgba(15,23,42,.06);
-        }
-
-        .warning {
-            background: #fff7ed;
-            color: #9a3412;
-            border-radius: 14px;
-            padding: 16px;
-            line-height: 1.7;
-            margin-bottom: 20px;
-        }
-
-        .meta {
-            background: #f8fafc;
-            border-radius: 14px;
-            padding: 16px;
-            margin-bottom: 20px;
-            line-height: 1.7;
-        }
-
-        label {
-            display: block;
-            font-size: 13px;
-            color: #6b7280;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        input {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: 1px solid #d1d5db;
-            margin-bottom: 16px;
-            font-size: 14px;
-        }
-
-        .actions {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        button,
-        .button {
-            border: none;
-            text-decoration: none;
-            border-radius: 12px;
-            padding: 12px 16px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-block;
-        }
-
-        .danger {
-            background: #dc2626;
-            color: white;
-        }
-
-        .cancel {
-            background: #e5e7eb;
-            color: #111827;
-        }
-
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body { margin: 0; background: #f3f4f6; color: #111827; }
+        .topbar { background: linear-gradient(135deg, #111827, #1f2937, #312e81); color: white; padding: 22px 28px; }
+        .topbar-inner { max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .title { font-size: 28px; font-weight: 700; }
+        .back { text-decoration: none; color: white; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.15); padding: 10px 16px; border-radius: 12px; font-weight: 600; }
+        .container { max-width: 900px; margin: 24px auto; padding: 0 20px 24px; }
+        .card { background: white; border-radius: 18px; padding: 24px; box-shadow: 0 10px 24px rgba(15,23,42,.06); }
+        .warning { background: #fff7ed; color: #9a3412; border-radius: 14px; padding: 16px; line-height: 1.7; margin-bottom: 20px; }
+        .meta { background: #f8fafc; border-radius: 14px; padding: 16px; margin-bottom: 20px; line-height: 1.7; }
+        label { display: block; font-size: 13px; color: #6b7280; font-weight: 700; margin-bottom: 8px; }
+        input, select, textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid #d1d5db; margin-bottom: 16px; font-size: 14px; background: white; }
+        textarea { min-height: 110px; resize: vertical; }
+        .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        button, .button { border: none; text-decoration: none; border-radius: 12px; padding: 12px 16px; font-weight: 700; cursor: pointer; display: inline-block; }
+        .danger { background: #dc2626; color: white; }
+        .cancel { background: #e5e7eb; color: #111827; }
         @media (max-width: 760px) {
-            .topbar-inner {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            button,
-            .button {
-                width: 100%;
-                text-align: center;
-            }
+            .topbar-inner { flex-direction: column; align-items: flex-start; }
+            .actions { flex-direction: column; }
+            button, .button { width: 100%; text-align: center; }
         }
     </style>
 </head>
@@ -144,7 +35,7 @@
 
 <div class="topbar">
     <div class="topbar-inner">
-        <div class="title">Delete Player</div>
+        <div class="title">Remove Player</div>
         <a class="back" href="/member/{{ member.igg_id }}">Cancel</a>
     </div>
 </div>
@@ -152,8 +43,8 @@
 <div class="container">
     <div class="card">
         <div class="warning">
-            This will permanently delete this player from the current roster and remove their name history.
-            Existing report rows will remain for historical reports.
+            This will remove the player from the active roster and move them into Former Members.
+            Their removal reason, notes, stats, and profile details will be kept for future reference.
         </div>
 
         <div class="meta">
@@ -165,11 +56,27 @@
         </div>
 
         <form action="/member/{{ member.igg_id }}/delete" method="post">
+            <label>Reason for leaving</label>
+            <select name="removal_reason" required>
+                <option value="">Select a reason...</option>
+                <option value="Left guild">Left guild</option>
+                <option value="Kicked - inactivity">Kicked - inactivity</option>
+                <option value="Kicked - underperformance">Kicked - underperformance</option>
+                <option value="Kicked - rule breach">Kicked - rule breach</option>
+                <option value="Moved to sister guild">Moved to sister guild</option>
+                <option value="Temporary removal">Temporary removal</option>
+                <option value="Alt removed">Alt removed</option>
+                <option value="Other">Other</option>
+            </select>
+
+            <label>Removal notes</label>
+            <textarea name="removal_notes" placeholder="Optional notes, for example: moved after KvK, failed requirements, went inactive, transferred to another guild..."></textarea>
+
             <label>Type the player name exactly to confirm:</label>
             <input name="confirm_text" required>
 
             <div class="actions">
-                <button class="danger" type="submit">Delete Player</button>
+                <button class="danger" type="submit">Remove to Former Members</button>
                 <a class="button cancel" href="/member/{{ member.igg_id }}">Cancel</a>
             </div>
         </form>

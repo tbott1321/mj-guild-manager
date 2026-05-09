@@ -2070,9 +2070,13 @@ def archive_individual_member(
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
+    c.execute("SELECT * FROM members WHERE igg_id = ? AND guild_id = ?", (igg_id, guild_id))
     member = c.fetchone()
 
     if not member:
@@ -2083,23 +2087,25 @@ def archive_individual_member(
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
+    removal_reason = (removal_reason or "Other").strip() or "Other"
+    removal_notes = (removal_notes or "").strip()
     removed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
         INSERT INTO former_members
-        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+        (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
          alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
          watchlist_flag, removal_reason, removal_notes, removed_at, original_created_at, original_updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        member["igg_id"], member["name"], member["rank"], member["might"], member["kills"], member["edm"],
+        guild_id, member["igg_id"], member["name"], member["rank"], member["might"], member["kills"], member["edm"],
         member["mana"], member["sigils"], member["kingdom_limit"], member["comments"],
         member["alt_account"], member["troop_comp"], member["communication_method"], member["whatsapp_number"],
         member["discord_username"], member["watchlist_flag"], removal_reason, removal_notes, removed_at,
         member["created_at"], member["updated_at"]
     ))
 
-    c.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
+    c.execute("DELETE FROM members WHERE igg_id = ? AND guild_id = ?", (igg_id, guild_id))
     conn.commit()
     conn.close()
 
@@ -2111,9 +2117,13 @@ def former_members_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members ORDER BY removed_at DESC, LOWER(name)")
+    c.execute("SELECT * FROM former_members WHERE guild_id = ? ORDER BY removed_at DESC, LOWER(name)", (guild_id,))
     former_members = c.fetchall()
     conn.close()
 
@@ -2128,9 +2138,13 @@ def restore_former_member(request: Request, former_id: int):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    c.execute("SELECT * FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
     former = c.fetchone()
 
     if not former:
@@ -2141,18 +2155,18 @@ def restore_former_member(request: Request, former_id: int):
 
     c.execute("""
         INSERT OR REPLACE INTO members
-        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+        (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
          alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
          watchlist_flag, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        former["igg_id"], former["name"], former["rank"], former["might"], former["kills"], former["edm"],
+        guild_id, former["igg_id"], former["name"], former["rank"], former["might"], former["kills"], former["edm"],
         former["mana"], former["sigils"], former["kingdom_limit"], former["comments"],
         former["alt_account"], former["troop_comp"], former["communication_method"], former["whatsapp_number"],
         former["discord_username"], former["watchlist_flag"], former["original_created_at"] or now, now
     ))
 
-    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
+    c.execute("DELETE FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
     conn.commit()
     conn.close()
 
@@ -2164,9 +2178,13 @@ def confirm_delete_former_member(request: Request, former_id: int):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    c.execute("SELECT * FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
     former = c.fetchone()
     conn.close()
 
@@ -2184,9 +2202,13 @@ def permanently_delete_former_member(request: Request, former_id: int, confirm_t
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
+    c.execute("SELECT * FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
     former = c.fetchone()
 
     if not former:
@@ -2197,8 +2219,8 @@ def permanently_delete_former_member(request: Request, former_id: int, confirm_t
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
-    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
-    c.execute("DELETE FROM name_history WHERE igg_id = ?", (former["igg_id"],))
+    c.execute("DELETE FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
+    c.execute("DELETE FROM name_history WHERE igg_id = ? AND guild_id = ?", (former["igg_id"], guild_id))
     conn.commit()
     conn.close()
 
