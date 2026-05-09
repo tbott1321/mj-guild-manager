@@ -100,6 +100,82 @@
             white-space: nowrap;
         }
 
+
+
+        /* Icon upgrade */
+        .stat-card {
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 14px;
+        }
+        .stat-body { min-width: 0; }
+        .icon-circle,
+        .stat-icon,
+        .section-icon,
+        .insight-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 48px;
+        }
+        .stat-icon svg,
+        .section-icon svg,
+        .insight-icon svg,
+        .billing-icon svg,
+        .btn svg,
+        .report-btn svg,
+        .search-btn svg,
+        .reset-btn svg {
+            width: 26px;
+            height: 26px;
+            stroke-width: 2.4;
+        }
+        .stat-members { background: #ede9fe; color: #4f46e5; }
+        .stat-might { background: #dbeafe; color: #2563eb; }
+        .stat-kills { background: #dcfce7; color: #16a34a; }
+        .stat-edm { background: #ffedd5; color: #ea580c; }
+        .stat-kingdom { background: #f3e8ff; color: #7c3aed; }
+        .stat-mana { background: #dbeafe; color: #0f63d8; }
+        .stat-sigils { background: #e0f2fe; color: #1d4ed8; }
+        .section-heading {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .section-icon { background: #ede9fe; color: #6d28d9; }
+        .button-icon,
+        .btn-icon {
+            width: 18px;
+            height: 18px;
+            vertical-align: -3px;
+            margin-right: 7px;
+        }
+        .insight-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .insight-icon { width: 44px; height: 44px; flex-basis: 44px; }
+        .insight-icon.watch { background:#ede9fe; color:#4f46e5; }
+        .insight-icon.pending { background:#ffedd5; color:#ea580c; }
+        .insight-icon.fail { background:#fee2e2; color:#dc2626; }
+        .insight-icon.gf { background:#dbeafe; color:#2563eb; }
+        .insight-icon.mana { background:#dbeafe; color:#0f63d8; }
+        .insight-icon.sigil { background:#e0f2fe; color:#1d4ed8; }
+        .insight-body { min-width: 0; }
+        .billing-icon { color: #312e81; }
+        .billing-icon.status { color:#16a34a; }
+        .billing-icon.trial { color:#2563eb; }
+        .billing-icon.period { color:#7c3aed; }
+        .billing-icon.manage { color:#16a34a; }
+        .wolf-icon { width: 30px !important; height: 30px !important; fill: currentColor; stroke: none !important; }
+        .mana-cube { fill: none; stroke: currentColor; }
+        .btn, .report-btn, .search-btn, .reset-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+
         .report-section h2,
         .watchlist-box h2,
         .insights-box h2,
@@ -652,20 +728,20 @@
 
     <div class="top-actions">
         {% if is_admin %}
-            <a href="/import" class="btn">Import</a>
-            <a href="/pending-members" class="btn">Pending Members</a>
-            <a href="/former-members" class="btn">Former Members</a>
-            <a href="/guild-requirements" class="btn">Guild Requirements</a>
-            <a href="/snapshots/create" class="btn">Manual Snapshot</a>
-            <a href="/backup" class="btn">Backup / Restore</a>
-            <a href="/reports/archive" class="btn">Report Archive</a>
-            <a href="/admin/delete-all" class="btn btn-danger">Delete All Players</a>
-            <a href="/admin/logout" class="btn">Admin Logout</a>
-            <a href="/guild/logout" class="btn">Switch Guild</a>
+            <a href="/import" class="btn">☁️ Import</a>
+            <a href="/pending-members" class="btn">👥 Pending Members</a>
+            <a href="/former-members" class="btn">📋 Former Members</a>
+            <a href="/guild-requirements" class="btn">⚙️ Guild Requirements</a>
+            <a href="/snapshots/create" class="btn">📸 Manual Snapshot</a>
+            <a href="/backup" class="btn">💼 Backup / Restore</a>
+            <a href="/reports/archive" class="btn">🗄️ Report Archive</a>
+            <a href="/admin/delete-all" class="btn btn-danger">🗑️ Delete All Players</a>
+            <a href="/admin/logout" class="btn">↪️ Admin Logout</a>
+            <a href="/guild/logout" class="btn">⇄ Switch Guild</a>
         {% else %}
-            <a href="/reports/archive" class="btn">Report Archive</a>
-            <a href="/admin/login" class="btn">Admin Login</a>
-            <a href="/guild/logout" class="btn">Switch Guild</a>
+            <a href="/reports/archive" class="btn">🗄️ Report Archive</a>
+            <a href="/admin/login" class="btn">🔐 Admin Login</a>
+            <a href="/guild/logout" class="btn">⇄ Switch Guild</a>
         {% endif %}
     </div>
 </div>
@@ -674,74 +750,81 @@
 
     <div class="stats-box">
         <div class="stat-card">
-            <div class="stat-title">Total Members</div>
-            <div class="stat-value">{{ members|length }}</div>
+            <div class="stat-icon stat-members"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Total Members</div>
+            <div class="stat-value">{{ members|length }}</div></div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-title">Guild Total Might</div>
-            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='might')) }}</div>
+            <div class="stat-icon stat-might"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Guild Total Might</div>
+            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='might')) }}</div></div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-title">Guild Total Kills</div>
-            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='kills')) }}</div>
+            <div class="stat-icon stat-kills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m14.5 17.5 3 3 3-3-3-3"/><path d="m3 3 7.5 7.5"/><path d="m9 15-6 6"/><path d="M14 4l6 6"/><path d="m20 4-6 6"/><path d="M4 20l6-6"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Guild Total Kills</div>
+            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='kills')) }}</div></div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-title">Guild Total EDM</div>
-            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='edm')) }}</div>
+            <div class="stat-icon stat-edm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8.5 14.5A4.5 4.5 0 0 0 13 19a5 5 0 0 0 5-5c0-4-4-6-4-10-3 2-6 5-5.5 10.5Z"/><path d="M12 19c-2 0-3-1.2-3-3 0-1.5 1-2.5 2-3.5.2 1.7 2.5 2.3 2.5 4.2A2.3 2.3 0 0 1 12 19Z"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Guild Total EDM</div>
+            <div class="stat-value">{{ "{:,}".format(members | sum(attribute='edm')) }}</div></div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-title">Guild Max Kingdom</div>
+            <div class="stat-icon stat-kingdom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m2 8 5 4 5-8 5 8 5-4-2 11H4L2 8Z"/><path d="M4 19h16"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Guild Max Kingdom</div>
             <div class="stat-value">
                 {% if guild_max_kingdom %}
                     K{{ guild_max_kingdom }}
                 {% else %}
                     N/A
                 {% endif %}
-            </div>
+            </div></div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-title">Average Mana</div>
+            <div class="stat-icon stat-mana"><svg class="mana-cube" viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7l9-5Z"/><path d="M12 12 21 7"/><path d="M12 12v10"/><path d="M12 12 3 7"/><path d="M7.5 4.5 16.5 9.5"/><path d="M16.5 4.5 7.5 9.5"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Average Mana</div>
             <div class="stat-value">
                 {% if members %}
                     {{ ((members | sum(attribute='mana')) / members|length)|round(1) }}
                 {% else %}
                     0
                 {% endif %}
-            </div>
+            </div></div>
         </div>
 
         <div class="stat-card">
-            <div class="stat-title">Average Sigils</div>
+            <div class="stat-icon stat-sigils"><svg class="wolf-icon" viewBox="0 0 64 64"><path d="M48 6 39 20l-10-5-5 11-12 2 9 8-4 12 12-4 7 13 5-13 12-4-9-9 11-9-9-3 1-13Z"/><path d="M38 28 30 31l8 3 7-4-7-2Z" fill="white" opacity=".55"/></svg></div>
+            <div class="stat-body"><div class="stat-title">Average Sigils</div>
             <div class="stat-value">
                 {% if members %}
                     {{ ((members | sum(attribute='sigils')) / members|length)|round(1) }}
                 {% else %}
                     0
                 {% endif %}
-            </div>
+            </div></div>
         </div>
     </div>
 
     <div class="report-section">
-        <h2>Reports</h2>
+        <h2 class="section-heading"><span class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/><path d="M9 17V9"/><path d="M13 17v-5"/><path d="M17 17v-3"/><path d="M15 3h6v6"/><path d="m21 3-7 7"/></svg></span>Reports</h2>
 
         <div class="report-buttons">
             {% if is_admin %}
-                <a href="/reports/kills/create" class="report-btn">Create Kill Report</a>
-                <a href="/reports/guildfest/create" class="report-btn">Create Guild Fest Report</a>
+                <a href="/reports/kills/create" class="report-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m14.5 17.5 3 3 3-3-3-3"/><path d="m3 3 7.5 7.5"/><path d="m9 15-6 6"/><path d="M14 4l6 6"/><path d="m20 4-6 6"/><path d="M4 20l6-6"/></svg><span>Create Kill Report</span></a>
+                <a href="/reports/guildfest/create" class="report-btn"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M5 5H3v3a4 4 0 0 0 4 4"/><path d="M19 5h2v3a4 4 0 0 1-4 4"/></svg><span>Create Guild Fest Report</span></a>
             {% endif %}
 
             {% if latest_kill_report %}
-                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary">View Latest Kill Report</a>
+                <a href="/reports/kills/{{ latest_kill_report.id }}" class="report-btn secondary"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 15v2"/><path d="M12 9v8"/><path d="M17 12v5"/></svg><span>View Latest Kill Report</span></a>
             {% endif %}
 
             {% if latest_guild_fest_report %}
-                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary">View Latest Guild Fest Report</a>
+                <a href="/reports/guildfest/{{ latest_guild_fest_report.id }}" class="report-btn secondary"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18"/><path d="M7 15v2"/><path d="M12 9v8"/><path d="M17 12v5"/></svg><span>View Latest Guild Fest Report</span></a>
             {% endif %}
         </div>
 
@@ -767,7 +850,7 @@
 <div class="billing-box">
     <div class="billing-grid">
         <div class="billing-item">
-            <div class="billing-icon plan">📅</div>
+            <div class="billing-icon plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Plan</div>
                 <div class="billing-value">{{ billing.plan }}</div>
@@ -775,7 +858,7 @@
         </div>
 
         <div class="billing-item">
-            <div class="billing-icon status">✅</div>
+            <div class="billing-icon status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Status</div>
                 <div class="billing-value status-text">
@@ -788,7 +871,7 @@
         </div>
 
         <div class="billing-item">
-            <div class="billing-icon trial">🕘</div>
+            <div class="billing-icon trial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2h12M6 22h12M8 2v5a4 4 0 0 0 1.2 2.9L12 12l2.8-2.1A4 4 0 0 0 16 7V2M8 22v-5a4 4 0 0 1 1.2-2.9L12 12l2.8 2.1A4 4 0 0 1 16 17v5"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Trial Ends</div>
                 <div class="billing-value">{{ billing.trial_ends_at or "N/A" }}</div>
@@ -796,7 +879,7 @@
         </div>
 
         <div class="billing-item">
-            <div class="billing-icon period">💳</div>
+            <div class="billing-icon period"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Next Billing</div>
                 <div class="billing-value">{{ billing.current_period_end or "N/A" }}</div>
@@ -804,7 +887,7 @@
         </div>
 
         <div class="billing-item">
-            <div class="billing-icon manage">⚙️</div>
+            <div class="billing-icon manage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9c.2.6.8 1 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Manage Billing</div>
                 <a href="/billing/portal" class="billing-manage-btn">Manage Billing</a>
@@ -815,37 +898,43 @@
 {% endif %}
 
 <div class="insights-box">
-        <h2>Admin Quick Insights</h2>
+        <h2 class="section-heading"><span style="color:#312e81">📈</span>Admin Quick Insights</h2>
 
         <div class="insight-grid">
             <div class="insight-card">
-                <div class="insight-label">Watchlist</div>
-                <div class="insight-value">{{ dashboard_insights.watchlist_count }}</div>
+                <div class="insight-icon watch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                <div class="insight-body"><div class="insight-label">Watchlist</div>
+                <div class="insight-value">{{ dashboard_insights.watchlist_count }}</div></div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Pending Approvals</div>
-                <div class="insight-value">{{ dashboard_insights.pending_count }}</div>
+                <div class="insight-icon pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></div>
+                <div class="insight-body"><div class="insight-label">Pending Approvals</div>
+                <div class="insight-value">{{ dashboard_insights.pending_count }}</div></div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Latest Kill Report Fails</div>
-                <div class="insight-value">{{ dashboard_insights.latest_kill_fail_count }}</div>
+                <div class="insight-icon fail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+                <div class="insight-body"><div class="insight-label">Latest Kill Report Fails</div>
+                <div class="insight-value">{{ dashboard_insights.latest_kill_fail_count }}</div></div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Latest Guild Fest Fails</div>
-                <div class="insight-value">{{ dashboard_insights.latest_gf_fail_count }}</div>
+                <div class="insight-icon gf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 22V4"/><path d="M4 4h12l-1 4 1 4H4"/></svg></div>
+                <div class="insight-body"><div class="insight-label">Latest Guild Fest Fails</div>
+                <div class="insight-value">{{ dashboard_insights.latest_gf_fail_count }}</div></div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Low Mana (&lt;1)</div>
-                <div class="insight-value">{{ dashboard_insights.low_mana_count }}</div>
+                <div class="insight-icon mana"><svg class="mana-cube" viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7l9-5Z"/><path d="M12 12 21 7"/><path d="M12 12v10"/><path d="M12 12 3 7"/><path d="M7.5 4.5 16.5 9.5"/><path d="M16.5 4.5 7.5 9.5"/></svg></div>
+                <div class="insight-body"><div class="insight-label">Low Mana (&lt;1)</div>
+                <div class="insight-value">{{ dashboard_insights.low_mana_count }}</div></div>
             </div>
 
             <div class="insight-card">
-                <div class="insight-label">Low Sigils (&lt;80)</div>
-                <div class="insight-value">{{ dashboard_insights.low_sigils_count }}</div>
+                <div class="insight-icon sigil"><svg class="wolf-icon" viewBox="0 0 64 64"><path d="M48 6 39 20l-10-5-5 11-12 2 9 8-4 12 12-4 7 13 5-13 12-4-9-9 11-9-9-3 1-13Z"/><path d="M38 28 30 31l8 3 7-4-7-2Z" fill="white" opacity=".55"/></svg></div>
+                <div class="insight-body"><div class="insight-label">Low Sigils (&lt;80)</div>
+                <div class="insight-value">{{ dashboard_insights.low_sigils_count }}</div></div>
             </div>
         </div>
     </div>
@@ -919,7 +1008,7 @@
                     placeholder="{% if is_admin %}Search by name, User ID, rank, might, kills, EDM, or kingdom{% else %}Search by name, rank, might, kills, EDM, or kingdom{% endif %}"
                 >
 
-                <button class="search-btn" type="submit">Search</button>
+                <button class="search-btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Search</span></button>
             </div>
 
             <div class="filter-row">
@@ -966,7 +1055,7 @@
                 </select>
                 {% endif %}
 
-                <button class="search-btn" type="submit">Apply Filters</button>
+                <button class="search-btn" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M2 14h4M10 8h4M18 16h4"/></svg><span>Apply Filters</span></button>
                 <a href="/" class="reset-btn">Reset</a>
             </div>
         </form>
