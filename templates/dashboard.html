@@ -604,7 +604,7 @@
                     type="text"
                     name="search"
                     value="{{ search }}"
-                    placeholder="Search by name, User ID, rank, might, kills, EDM, or kingdom"
+                    placeholder="{% if is_admin %}Search by name, User ID, rank, might, kills, EDM, or kingdom{% else %}Search by name, rank, might, kills, EDM, or kingdom{% endif %}"
                 >
 
                 <button class="search-btn" type="submit">Search</button>
