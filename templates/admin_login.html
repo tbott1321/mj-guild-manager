@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJ Guild Manager - Admin Login</title>
+    <style>
+        * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #111827, #1f2937, #312e81);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            width: 100%;
+            max-width: 460px;
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 24px 50px rgba(0,0,0,0.22);
+        }
+        h1 { margin: 0 0 10px; font-size: 30px; color: #111827; }
+        p { color: #6b7280; line-height: 1.6; margin-bottom: 20px; }
+        label {
+            display: block;
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        input {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        button, a {
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 13px 18px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            display: inline-block;
+        }
+        button {
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: white;
+        }
+        a {
+            background: #eef2ff;
+            color: #4338ca;
+            margin-left: 10px;
+        }
+        .error {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Admin Login</h1>
+        <p>Enter the admin password to unlock editing, importing, and management tools.</p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form action="/admin/login" method="post">
+            <label for="password">Admin Password</label>
+            <input id="password" name="password" type="password" required>
+            <button type="submit">Login</button>
+            <a href="/">Back to Dashboard</a>
+        </form>
+    </div>
+</body>
+</html>
