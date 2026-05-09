@@ -171,9 +171,9 @@
         <div class="card">
             <h2>Import Guild Spreadsheet</h2>
             <div class="muted">
-                Upload your weekly guild spreadsheet to update member records.
-                Existing players will be updated, renamed players will be logged in name history,
-                and new players will be added automatically.
+                Upload your weekly guild spreadsheet to create a safe preview before anything is changed.
+                Existing players, renamed players, stat updates, new players, and missing players will be shown first.
+                Nothing is written to the live roster until you confirm the preview.
             </div>
 
             <div class="upload-box">
@@ -182,7 +182,7 @@
                     <input id="file" name="file" type="file" accept=".xlsx,.xls,.csv" required>
 
                     <div class="actions">
-                        <button class="button" type="submit">Import File</button>
+                        <button class="button" type="submit">Preview Import</button>
                         <a class="link-button" href="/">Cancel</a>
                     </div>
                 </form>
@@ -205,9 +205,8 @@
             </ul>
 
             <div class="note">
-                The import will keep admin-only profile fields already stored in the app, such as
-                Mana, Sigils, Alt Account, Troop Comp, Communication details, and Comments.
-                It only updates the fields coming from the weekly spreadsheet unless the player is brand new.
+                The preview will show new players, renamed players, updated stats, unchanged rows, and players missing from the uploaded file.
+                You can export the preview to Excel before confirming. Admin-only profile fields already stored in the app, such as Mana, Sigils, Alt Account, Troop Comp, Communication details, and Comments, are preserved.
             </div>
         </div>
     </div>

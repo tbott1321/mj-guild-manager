@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form, UploadFile, File, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
@@ -16,6 +16,7 @@ import hashlib
 import hmac
 import secrets
 import re
+import json
 import stripe
 
 app = FastAPI()
@@ -42,6 +43,8 @@ GUILD_DATA_TABLES = [
     "guild_fest_reports",
     "guild_fest_report_rows",
     "guild_settings",
+    "import_previews",
+    "import_preview_rows",
 ]
 
 
@@ -477,6 +480,72 @@ def init_db():
         )
     """)
 
+
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS import_previews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER,
+            token TEXT UNIQUE,
+            source_filename TEXT,
+            created_at TEXT
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS import_preview_rows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guild_id INTEGER,
+            preview_id INTEGER,
+            igg_id TEXT,
+            name TEXT,
+            rank TEXT,
+            might INTEGER,
+            kills INTEGER,
+            edm INTEGER,
+            status TEXT,
+            old_name TEXT,
+            old_rank TEXT,
+            old_might INTEGER,
+            old_kills INTEGER,
+            old_edm INTEGER,
+            might_diff INTEGER,
+            kills_diff INTEGER,
+            edm_diff INTEGER
+        )
+    """)
+
+    for table_name, columns in {
+        "import_previews": {
+            "guild_id": "INTEGER",
+            "token": "TEXT",
+            "source_filename": "TEXT",
+            "created_at": "TEXT",
+        },
+        "import_preview_rows": {
+            "guild_id": "INTEGER",
+            "preview_id": "INTEGER",
+            "igg_id": "TEXT",
+            "name": "TEXT",
+            "rank": "TEXT",
+            "might": "INTEGER",
+            "kills": "INTEGER",
+            "edm": "INTEGER",
+            "status": "TEXT",
+            "old_name": "TEXT",
+            "old_rank": "TEXT",
+            "old_might": "INTEGER",
+            "old_kills": "INTEGER",
+            "old_edm": "INTEGER",
+            "might_diff": "INTEGER",
+            "kills_diff": "INTEGER",
+            "edm_diff": "INTEGER",
+        },
+    }.items():
+        for col, definition in columns.items():
+            if not column_exists(conn, table_name, col):
+                c.execute(f"ALTER TABLE {table_name} ADD COLUMN {col} {definition}")
+
     # Option B multiguild migration: add guild_id to every guild-owned table.
     for table in GUILD_DATA_TABLES:
         if not column_exists(conn, table, "guild_id"):
@@ -629,7 +698,6 @@ def create_current_roster_snapshot(guild_id: int, snapshot_name=None, source_fil
             (guild_id, snapshot_id, igg_id, player_name, rank, might, kills, edm)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            guild_id,
             snapshot_id,
             member["igg_id"],
             member["name"],
@@ -1639,7 +1707,6 @@ def dashboard_view(
     watchlist_summary = []
     watchlist_recommendations = []
     dashboard_insights = {}
-    billing = None
 
     if is_admin(request):
         c.execute("SELECT igg_id, name FROM members WHERE guild_id = ? AND COALESCE(watchlist_flag, 0) = 1 ORDER BY LOWER(name)", (guild_id,))
@@ -1649,26 +1716,6 @@ def dashboard_view(
 
         watchlist_recommendations = get_watchlist_recommendations(conn, guild_id)
         dashboard_insights = get_dashboard_insights(conn, guild_id)
-
-        guild = c.execute("SELECT * FROM guilds WHERE id = ?", (guild_id,)).fetchone()
-        if guild:
-            plan = get_billing_plan(guild["stripe_plan"] or "monthly")
-            last_payment_amount = guild["last_payment_amount"] or 0
-            billing = {
-                "plan": plan["label"],
-                "price": plan["display_price"],
-                "status": billing_status_label(guild["subscription_status"], guild["manual_access"]),
-                "status_raw": guild["subscription_status"] or "not_started",
-                "manual": int(guild["manual_access"] or 0) == 1,
-                "trial_ends_at": guild["trial_ends_at"] or "",
-                "current_period_end": guild["current_period_end"] or "",
-                "last_payment_at": guild["last_payment_at"] or "",
-                "last_payment_amount": last_payment_amount,
-                "last_payment_currency": (guild["last_payment_currency"] or "GBP").upper(),
-                "last_payment_display": f"£{last_payment_amount / 100:.2f}" if last_payment_amount else "No payment yet",
-                "manage_url": "/billing/portal" if guild["stripe_customer_id"] else f"/billing/checkout/{guild_id}",
-                "manage_label": "Manage Billing" if guild["stripe_customer_id"] else "Complete Billing Setup",
-            }
 
     conn.close()
 
@@ -1691,8 +1738,7 @@ def dashboard_view(
         "dashboard_insights": dashboard_insights,
         "guild_max_kingdom": guild_max_kingdom,
         "guild_tag": current_guild_tag(request),
-        "is_admin": admin_view,
-        "billing": billing
+        "is_admin": admin_view
     })
 
 
@@ -2070,13 +2116,9 @@ def archive_individual_member(
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
-
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM members WHERE igg_id = ? AND guild_id = ?", (igg_id, guild_id))
+    c.execute("SELECT * FROM members WHERE igg_id = ?", (igg_id,))
     member = c.fetchone()
 
     if not member:
@@ -2087,25 +2129,23 @@ def archive_individual_member(
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
-    removal_reason = (removal_reason or "Other").strip() or "Other"
-    removal_notes = (removal_notes or "").strip()
     removed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
         INSERT INTO former_members
-        (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
          alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
          watchlist_flag, removal_reason, removal_notes, removed_at, original_created_at, original_updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        guild_id, member["igg_id"], member["name"], member["rank"], member["might"], member["kills"], member["edm"],
+        member["igg_id"], member["name"], member["rank"], member["might"], member["kills"], member["edm"],
         member["mana"], member["sigils"], member["kingdom_limit"], member["comments"],
         member["alt_account"], member["troop_comp"], member["communication_method"], member["whatsapp_number"],
         member["discord_username"], member["watchlist_flag"], removal_reason, removal_notes, removed_at,
         member["created_at"], member["updated_at"]
     ))
 
-    c.execute("DELETE FROM members WHERE igg_id = ? AND guild_id = ?", (igg_id, guild_id))
+    c.execute("DELETE FROM members WHERE igg_id = ?", (igg_id,))
     conn.commit()
     conn.close()
 
@@ -2117,13 +2157,9 @@ def former_members_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
-
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE guild_id = ? ORDER BY removed_at DESC, LOWER(name)", (guild_id,))
+    c.execute("SELECT * FROM former_members ORDER BY removed_at DESC, LOWER(name)")
     former_members = c.fetchall()
     conn.close()
 
@@ -2138,13 +2174,9 @@ def restore_former_member(request: Request, former_id: int):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
-
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
     former = c.fetchone()
 
     if not former:
@@ -2155,18 +2187,18 @@ def restore_former_member(request: Request, former_id: int):
 
     c.execute("""
         INSERT OR REPLACE INTO members
-        (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
+        (igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, comments,
          alt_account, troop_comp, communication_method, whatsapp_number, discord_username,
          watchlist_flag, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        guild_id, former["igg_id"], former["name"], former["rank"], former["might"], former["kills"], former["edm"],
+        former["igg_id"], former["name"], former["rank"], former["might"], former["kills"], former["edm"],
         former["mana"], former["sigils"], former["kingdom_limit"], former["comments"],
         former["alt_account"], former["troop_comp"], former["communication_method"], former["whatsapp_number"],
         former["discord_username"], former["watchlist_flag"], former["original_created_at"] or now, now
     ))
 
-    c.execute("DELETE FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
+    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
     conn.commit()
     conn.close()
 
@@ -2178,13 +2210,9 @@ def confirm_delete_former_member(request: Request, former_id: int):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
-
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
     former = c.fetchone()
     conn.close()
 
@@ -2202,13 +2230,9 @@ def permanently_delete_former_member(request: Request, former_id: int, confirm_t
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
-
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT * FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
+    c.execute("SELECT * FROM former_members WHERE id = ?", (former_id,))
     former = c.fetchone()
 
     if not former:
@@ -2219,8 +2243,8 @@ def permanently_delete_former_member(request: Request, former_id: int, confirm_t
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
-    c.execute("DELETE FROM former_members WHERE id = ? AND guild_id = ?", (former_id, guild_id))
-    c.execute("DELETE FROM name_history WHERE igg_id = ? AND guild_id = ?", (former["igg_id"], guild_id))
+    c.execute("DELETE FROM former_members WHERE id = ?", (former_id,))
+    c.execute("DELETE FROM name_history WHERE igg_id = ?", (former["igg_id"],))
     conn.commit()
     conn.close()
 
@@ -2418,16 +2442,7 @@ def download_backup(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    if not os.path.exists(DB_PATH):
-        return HTMLResponse("<h2>Database file not found.</h2>", status_code=404)
-
-    filename = f"mj_guild_database_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-    return FileResponse(
-        DB_PATH,
-        media_type="application/octet-stream",
-        filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-    )
+    return RedirectResponse(url="/data/export-excel", status_code=302)
 
 
 @app.post("/backup/restore")
@@ -2522,16 +2537,7 @@ def manual_snapshot(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
-
-    try:
-        create_current_roster_snapshot(guild_id, source_filename="Manual snapshot from admin")
-    except Exception as e:
-        print(f"MANUAL_SNAPSHOT_ERROR guild_id={guild_id}: {e!r}")
-        return HTMLResponse(f"<h2>Manual snapshot failed</h2><pre>{str(e)}</pre>", status_code=500)
-
+    create_current_roster_snapshot(require_guild(request), source_filename="Manual snapshot from admin")
     return RedirectResponse(url="/reports/archive", status_code=302)
 
 
@@ -2571,23 +2577,28 @@ def admin_logout(request: Request):
     return RedirectResponse(url="/", status_code=302)
 
 
-@app.get("/import", response_class=HTMLResponse)
-def import_page(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    return templates.TemplateResponse(request, "import.html", {"is_admin": True})
 
 
-@app.post("/import")
-async def import_excel(request: Request, file: UploadFile = File(...)):
-    if not is_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=302)
+def clean_import_int(value):
+    try:
+        if pd.isna(value):
+            return 0
+        if isinstance(value, str):
+            value = value.replace(",", "").strip()
+            if value == "":
+                return 0
+        return int(float(value))
+    except Exception:
+        return 0
 
-    guild_id = require_guild(request)
-    if not guild_id:
-        return RedirectResponse(url="/guild/login", status_code=302)
 
+def normalise_import_rank(rank):
+    rank = "" if pd.isna(rank) else str(rank).strip().upper()
+    rank_map = {"R1": "RANK1", "R2": "RANK2", "R3": "RANK3", "R4": "RANK4", "R5": "RANK5"}
+    return rank_map.get(rank, rank)
+
+
+def read_guild_stats_upload(file: UploadFile):
     filename = (file.filename or "").lower()
     if filename.endswith(".csv"):
         df = pd.read_csv(file.file)
@@ -2597,42 +2608,130 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
     df.columns = [str(c).strip() for c in df.columns]
     required_columns = ["Name", "User ID", "Rank", "Might", "Kills", "Enemies Destroyed Might"]
     missing = [col for col in required_columns if col not in df.columns]
-
     if missing:
-        return HTMLResponse(f"""
-        <html><body style="font-family: Arial; padding: 30px;">
-        <h2>Import failed</h2>
-        <p>Missing column(s): <strong>{", ".join(missing)}</strong></p>
-        <p>Columns found:</p>
-        <pre>{", ".join(df.columns)}</pre>
-        <a href="/import">Back to import</a>
-        </body></html>
-        """, status_code=400)
+        return None, missing, list(df.columns)
 
-    conn = get_conn()
-    c = conn.cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    snapshot_name = f"Guild Stats {now}"
-    c.execute("""
-        INSERT INTO guild_stat_snapshots (guild_id, snapshot_name, imported_at, source_filename)
-        VALUES (?, ?, ?, ?)
-    """, (guild_id, snapshot_name, now, file.filename))
-    snapshot_id = c.lastrowid
-
+    rows = []
     for _, row in df.iterrows():
         igg_id = str(row["User ID"]).strip()
         if not igg_id or igg_id.lower() == "nan":
             continue
+        rows.append({
+            "igg_id": igg_id,
+            "name": "" if pd.isna(row["Name"]) else str(row["Name"]).strip(),
+            "rank": normalise_import_rank(row["Rank"]),
+            "might": clean_import_int(row["Might"]),
+            "kills": clean_import_int(row["Kills"]),
+            "edm": clean_import_int(row["Enemies Destroyed Might"]),
+        })
+    return rows, [], list(df.columns)
 
-        name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
-        rank = "" if pd.isna(row["Rank"]) else str(row["Rank"]).strip()
-        might = 0 if pd.isna(row["Might"]) else int(float(row["Might"]))
-        kills = 0 if pd.isna(row["Kills"]) else int(float(row["Kills"]))
-        edm = 0 if pd.isna(row["Enemies Destroyed Might"]) else int(float(row["Enemies Destroyed Might"]))
 
-        rank_map = {"R1": "RANK1", "R2": "RANK2", "R3": "RANK3", "R4": "RANK4", "R5": "RANK5"}
-        rank = rank_map.get(rank, rank)
+def create_import_preview(conn, guild_id: int, source_filename: str, rows: list[dict]):
+    token = secrets.token_urlsafe(24)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c = conn.cursor()
+
+    c.execute("""
+        INSERT INTO import_previews (guild_id, token, source_filename, created_at)
+        VALUES (?, ?, ?, ?)
+    """, (guild_id, token, source_filename or "Uploaded import", now))
+    preview_id = c.lastrowid
+
+    c.execute("SELECT * FROM members WHERE guild_id = ?", (guild_id,))
+    existing_members = {str(m["igg_id"]).strip(): m for m in c.fetchall() if m["igg_id"]}
+    uploaded_ids = set()
+
+    for row in rows:
+        igg_id = str(row["igg_id"]).strip()
+        uploaded_ids.add(igg_id)
+        existing = existing_members.get(igg_id)
+        status = "new"
+        old_name = old_rank = ""
+        old_might = old_kills = old_edm = 0
+        might_diff = kills_diff = edm_diff = 0
+
+        if existing:
+            old_name = existing["name"] or ""
+            old_rank = existing["rank"] or ""
+            old_might = int(existing["might"] or 0)
+            old_kills = int(existing["kills"] or 0)
+            old_edm = int(existing["edm"] or 0)
+            might_diff = int(row["might"] or 0) - old_might
+            kills_diff = int(row["kills"] or 0) - old_kills
+            edm_diff = int(row["edm"] or 0) - old_edm
+            if old_name != row["name"]:
+                status = "renamed"
+            elif old_rank != row["rank"] or might_diff != 0 or kills_diff != 0 or edm_diff != 0:
+                status = "updated"
+            else:
+                status = "unchanged"
+
+        c.execute("""
+            INSERT INTO import_preview_rows
+            (guild_id, preview_id, igg_id, name, rank, might, kills, edm, status,
+             old_name, old_rank, old_might, old_kills, old_edm, might_diff, kills_diff, edm_diff)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            guild_id, preview_id, igg_id, row["name"], row["rank"], row["might"], row["kills"], row["edm"], status,
+            old_name, old_rank, old_might, old_kills, old_edm, might_diff, kills_diff, edm_diff
+        ))
+
+    for igg_id, existing in existing_members.items():
+        if igg_id in uploaded_ids:
+            continue
+        c.execute("""
+            INSERT INTO import_preview_rows
+            (guild_id, preview_id, igg_id, name, rank, might, kills, edm, status,
+             old_name, old_rank, old_might, old_kills, old_edm, might_diff, kills_diff, edm_diff)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            guild_id, preview_id, igg_id,
+            existing["name"], existing["rank"], int(existing["might"] or 0), int(existing["kills"] or 0), int(existing["edm"] or 0), "missing",
+            existing["name"], existing["rank"], int(existing["might"] or 0), int(existing["kills"] or 0), int(existing["edm"] or 0), 0, 0, 0
+        ))
+
+    return token
+
+
+def get_import_preview(conn, guild_id: int, token: str):
+    preview = conn.execute(
+        "SELECT * FROM import_previews WHERE guild_id = ? AND token = ?",
+        (guild_id, token)
+    ).fetchone()
+    if not preview:
+        return None, [], {}
+    rows = conn.execute(
+        "SELECT * FROM import_preview_rows WHERE guild_id = ? AND preview_id = ? ORDER BY CASE status WHEN 'new' THEN 1 WHEN 'renamed' THEN 2 WHEN 'updated' THEN 3 WHEN 'missing' THEN 4 ELSE 5 END, LOWER(name)",
+        (guild_id, preview["id"])
+    ).fetchall()
+    summary = {"new": 0, "renamed": 0, "updated": 0, "missing": 0, "unchanged": 0, "total": len(rows)}
+    for row in rows:
+        key = row["status"] or "unchanged"
+        summary[key] = summary.get(key, 0) + 1
+    return preview, rows, summary
+
+
+def apply_import_preview(conn, guild_id: int, preview, rows):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c = conn.cursor()
+    snapshot_name = f"Guild Stats {now}"
+    c.execute("""
+        INSERT INTO guild_stat_snapshots (guild_id, snapshot_name, imported_at, source_filename)
+        VALUES (?, ?, ?, ?)
+    """, (guild_id, snapshot_name, now, preview["source_filename"]))
+    snapshot_id = c.lastrowid
+
+    for row in rows:
+        status = row["status"] or "unchanged"
+        if status == "missing":
+            continue
+        igg_id = str(row["igg_id"]).strip()
+        name = row["name"] or ""
+        rank = row["rank"] or ""
+        might = int(row["might"] or 0)
+        kills = int(row["kills"] or 0)
+        edm = int(row["edm"] or 0)
 
         c.execute("""
             INSERT INTO guild_stat_snapshot_rows
@@ -2642,7 +2741,6 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
 
         c.execute("SELECT * FROM members WHERE igg_id = ? AND guild_id = ?", (igg_id, guild_id))
         existing = c.fetchone()
-
         if existing:
             log_name_change(conn, guild_id, igg_id, existing["name"], name)
             c.execute("""
@@ -2663,11 +2761,157 @@ async def import_excel(request: Request, file: UploadFile = File(...)):
                     edm = excluded.edm,
                     source_filename = excluded.source_filename,
                     imported_at = excluded.imported_at
-            """, (guild_id, igg_id, name, rank, might, kills, edm, file.filename, now))
+            """, (guild_id, igg_id, name, rank, might, kills, edm, preview["source_filename"], now))
 
-    conn.commit()
+    c.execute("DELETE FROM import_preview_rows WHERE preview_id = ? AND guild_id = ?", (preview["id"], guild_id))
+    c.execute("DELETE FROM import_previews WHERE id = ? AND guild_id = ?", (preview["id"], guild_id))
+    return snapshot_id
+
+
+@app.get("/import", response_class=HTMLResponse)
+def import_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+    return templates.TemplateResponse(request, "import.html", {
+        "is_admin": True,
+        "preview_mode": True,
+    })
+
+
+@app.post("/import")
+async def import_excel_preview(request: Request, file: UploadFile = File(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/guild/login", status_code=302)
+
+    rows, missing, found_columns = read_guild_stats_upload(file)
+    if missing:
+        return HTMLResponse(f"""
+        <html><body style="font-family: Arial; padding: 30px;">
+        <h2>Import preview failed</h2>
+        <p>Missing column(s): <strong>{", ".join(missing)}</strong></p>
+        <p>Columns found:</p>
+        <pre>{", ".join(found_columns)}</pre>
+        <a href="/import">Back to import</a>
+        </body></html>
+        """, status_code=400)
+
+    conn = get_conn()
+    try:
+        token = create_import_preview(conn, guild_id, file.filename or "Uploaded import", rows)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return HTMLResponse(f"<h2>Import preview failed</h2><pre>{str(e)}</pre><p><a href='/import'>Back to import</a></p>", status_code=500)
+    conn.close()
+    return RedirectResponse(url=f"/import/preview/{token}", status_code=302)
+
+
+@app.get("/import/preview/{token}", response_class=HTMLResponse)
+def import_preview_page(request: Request, token: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    guild_id = require_guild(request)
+    conn = get_conn()
+    preview, rows, summary = get_import_preview(conn, guild_id, token)
+    conn.close()
+    if not preview:
+        return HTMLResponse("<h2>Import preview not found or expired.</h2><p><a href='/import'>Back to import</a></p>", status_code=404)
+
+    return templates.TemplateResponse(request, "import_preview.html", {
+        "preview": preview,
+        "rows": rows,
+        "summary": summary,
+        "is_admin": True,
+    })
+
+
+@app.get("/import/preview/{token}/export")
+def export_import_preview(request: Request, token: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    guild_id = require_guild(request)
+    conn = get_conn()
+    preview, rows, summary = get_import_preview(conn, guild_id, token)
+    conn.close()
+    if not preview:
+        return HTMLResponse("<h2>Import preview not found or expired.</h2>", status_code=404)
+
+    output = BytesIO()
+    preview_rows = []
+    for row in rows:
+        preview_rows.append({
+            "Status": row["status"],
+            "User ID": row["igg_id"],
+            "Name": row["name"],
+            "Old Name": row["old_name"],
+            "Rank": row["rank"],
+            "Old Rank": row["old_rank"],
+            "Might": row["might"],
+            "Old Might": row["old_might"],
+            "Might Diff": row["might_diff"],
+            "Kills": row["kills"],
+            "Old Kills": row["old_kills"],
+            "Kills Diff": row["kills_diff"],
+            "EDM": row["edm"],
+            "Old EDM": row["old_edm"],
+            "EDM Diff": row["edm_diff"],
+        })
+    summary_rows = [{"Metric": key.title(), "Count": value} for key, value in summary.items()]
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        pd.DataFrame(summary_rows).to_excel(writer, index=False, sheet_name="Summary")
+        pd.DataFrame(preview_rows).to_excel(writer, index=False, sheet_name="Preview")
+    output.seek(0)
+    filename = f"import_preview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.post("/import/preview/{token}/confirm")
+def confirm_import_preview(request: Request, token: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    guild_id = require_guild(request)
+    conn = get_conn()
+    try:
+        preview, rows, summary = get_import_preview(conn, guild_id, token)
+        if not preview:
+            conn.close()
+            return HTMLResponse("<h2>Import preview not found or expired.</h2><p><a href='/import'>Back to import</a></p>", status_code=404)
+        apply_import_preview(conn, guild_id, preview, rows)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return HTMLResponse(f"<h2>Import failed</h2><pre>{str(e)}</pre><p><a href='/import'>Back to import</a></p>", status_code=500)
     conn.close()
     return RedirectResponse(url="/", status_code=302)
+
+
+@app.post("/import/preview/{token}/cancel")
+def cancel_import_preview(request: Request, token: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    guild_id = require_guild(request)
+    conn = get_conn()
+    preview = conn.execute("SELECT * FROM import_previews WHERE guild_id = ? AND token = ?", (guild_id, token)).fetchone()
+    if preview:
+        conn.execute("DELETE FROM import_preview_rows WHERE preview_id = ? AND guild_id = ?", (preview["id"], guild_id))
+        conn.execute("DELETE FROM import_previews WHERE id = ? AND guild_id = ?", (preview["id"], guild_id))
+        conn.commit()
+    conn.close()
+    return RedirectResponse(url="/import", status_code=302)
 
 
 @app.get("/reports/kills/create", response_class=HTMLResponse)
