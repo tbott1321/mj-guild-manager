@@ -61,7 +61,7 @@
                         {% for report in kill_reports %}
                         <tr>
                             <td>{{ report.report_name }}</td>
-                            <td>{{ report.generated_at }}</td>
+                            <td><span data-utc="{{ report.generated_at or '' }}" data-empty="-">{{ report.generated_at or '-' }}</span></td>
                             <td><a class="link" href="/reports/kills/{{ report.id }}">Open</a></td>
                             {% if is_admin %}
                                 <td><a class="delete-link" href="/reports/delete/kills/{{ report.id }}">Delete</a></td>
@@ -91,7 +91,7 @@
                         {% for report in guild_fest_reports %}
                         <tr>
                             <td>{{ report.report_name }}</td>
-                            <td>{{ report.generated_at }}</td>
+                            <td><span data-utc="{{ report.generated_at or '' }}" data-empty="-">{{ report.generated_at or '-' }}</span></td>
                             <td><a class="link" href="/reports/guildfest/{{ report.id }}">Open</a></td>
                             {% if is_admin %}
                                 <td><a class="delete-link" href="/reports/delete/guildfest/{{ report.id }}">Delete</a></td>
@@ -121,7 +121,7 @@
                         {% for snapshot in snapshots %}
                         <tr>
                             <td>{{ snapshot.snapshot_name }}</td>
-                            <td>{{ snapshot.imported_at }}</td>
+                            <td><span data-utc="{{ snapshot.imported_at or '' }}" data-empty="-">{{ snapshot.imported_at or '-' }}</span></td>
                             <td>{{ snapshot.source_filename }}</td>
                             {% if is_admin %}
                                 <td><a class="delete-link" href="/snapshots/delete/{{ snapshot.id }}">Delete</a></td>

@@ -185,7 +185,7 @@
                         <select id="start_snapshot_id" name="start_snapshot_id" required>
                             <option value="">Select start snapshot</option>
                             {% for snap in snapshots %}
-                                <option value="{{ snap.id }}">{{ snap.snapshot_name }} — {{ snap.imported_at }}</option>
+                                <option value="{{ snap.id }}">{{ snap.snapshot_name }} — <span data-utc="{{ snap.imported_at or '' }}" data-empty="-">{{ snap.imported_at or '-' }}</span></option>
                             {% endfor %}
                         </select>
                     </div>
@@ -195,7 +195,7 @@
                         <select id="end_snapshot_id" name="end_snapshot_id" required>
                             <option value="">Select end snapshot</option>
                             {% for snap in snapshots %}
-                                <option value="{{ snap.id }}">{{ snap.snapshot_name }} — {{ snap.imported_at }}</option>
+                                <option value="{{ snap.id }}">{{ snap.snapshot_name }} — <span data-utc="{{ snap.imported_at or '' }}" data-empty="-">{{ snap.imported_at or '-' }}</span></option>
                             {% endfor %}
                         </select>
                     </div>

@@ -36,7 +36,7 @@
 
             <div class="meta">
                 <strong>Snapshot:</strong> {{ snapshot.snapshot_name }}<br>
-                <strong>Created:</strong> {{ snapshot.imported_at }}<br>
+                <strong>Created:</strong> <span data-utc="{{ snapshot.imported_at or '' }}" data-empty="-">{{ snapshot.imported_at or '-' }}</span><br>
                 <strong>Source:</strong> {{ snapshot.source_filename }}
             </div>
 

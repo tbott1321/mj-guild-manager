@@ -41,7 +41,7 @@
         <div class="meta">
             <strong>Player:</strong> {{ former.name }}<br>
             <strong>Reason removed:</strong> {{ former.removal_reason }}<br>
-            <strong>Removed at:</strong> {{ former.removed_at }}
+            <strong>Removed at:</strong> <span data-utc="{{ former.removed_at or '' }}" data-empty="-">{{ former.removed_at or '-' }}</span>
         </div>
 
         <form action="/former-members/{{ former.id }}/delete" method="post">

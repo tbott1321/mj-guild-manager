@@ -54,7 +54,7 @@
             <h2>Preview Summary</h2>
             <div class="muted">
                 Source file: <strong>{{ preview.source_filename }}</strong><br>
-                Created: {{ preview.created_at }}<br>
+                Created: <span data-utc="{{ preview.created_at or '' }}" data-empty="-">{{ preview.created_at or '-' }}</span><br>
                 Review the changes below. Nothing is applied until you confirm the import.
             </div>
 

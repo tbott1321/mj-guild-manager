@@ -127,8 +127,11 @@
             </form>
             {% endif %}
             <a class="btn" href="/billing/checkout/{{ guild.id }}">Open Stripe Checkout</a>
+            <form method="post" action="/site-admin/guild/{{ guild.id }}/stripe-sync">
+                <button type="submit">Sync Stripe Billing</button>
+            </form>
         </div>
-        <p class="muted">Manual activation lets you trial features or keep your own guild active without Stripe payment.</p>
+        <p class="muted">Manual activation lets you trial features or keep your own guild active without Stripe payment. Stripe sync is safe for duplicate billing emails because it only uses this guild's stored Stripe customer or subscription IDs.</p>
     </div>
 
     <div class="card">

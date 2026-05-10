@@ -829,14 +829,14 @@
             {% if latest_kill_report %}
                 Latest Kill Report:
                 <strong>{{ latest_kill_report.report_name }}</strong>
-                ({{ latest_kill_report.generated_at }})
+                (<span data-utc="{{ latest_kill_report.generated_at or '' }}" data-empty="-">{{ latest_kill_report.generated_at or '-' }}</span>)
                 <br>
             {% endif %}
 
             {% if latest_guild_fest_report %}
                 Latest Guild Fest Report:
                 <strong>{{ latest_guild_fest_report.report_name }}</strong>
-                ({{ latest_guild_fest_report.generated_at }})
+                (<span data-utc="{{ latest_guild_fest_report.generated_at or '' }}" data-empty="-">{{ latest_guild_fest_report.generated_at or '-' }}</span>)
             {% endif %}
         </div>
     </div>
@@ -871,7 +871,7 @@
             <div class="billing-icon trial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2h12M6 22h12M8 2v5a4 4 0 0 0 1.2 2.9L12 12l2.8-2.1A4 4 0 0 0 16 7V2M8 22v-5a4 4 0 0 1 1.2-2.9L12 12l2.8 2.1A4 4 0 0 1 16 17v5"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Trial Ends</div>
-                <div class="billing-value">{{ billing.trial_ends_at or "N/A" }}</div>
+                <div class="billing-value"><span data-utc="{{ billing.trial_ends_at or '' }}" data-empty="N/A">{{ billing.trial_ends_at or "N/A" }}</span></div>
             </div>
         </div>
 
@@ -879,7 +879,7 @@
             <div class="billing-icon period"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
             <div class="billing-content">
                 <div class="billing-label">Next Billing</div>
-                <div class="billing-value">{{ billing.current_period_end or "N/A" }}</div>
+                <div class="billing-value"><span data-utc="{{ billing.current_period_end or '' }}" data-empty="N/A">{{ billing.current_period_end or "N/A" }}</span></div>
             </div>
         </div>
 

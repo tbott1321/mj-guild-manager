@@ -60,10 +60,10 @@
             <strong>Billing Status:</strong>
             {% if guild.manual_access %}<span class="pill info">Manual Active</span>{% else %}<span class="pill">{{ guild.billing_status_label }}</span>{% endif %}<br>
             <strong>Plan:</strong> {{ guild.plan_label }} — {{ guild.plan_price }}<br>
-            <strong>Trial Ends:</strong> <span data-utc="{{ guild.trial_ends_at or '' }}" data-empty="-">{{ guild.trial_ends_at or '-' }}</span><br>
-            <strong>Current Period Ends:</strong> <span data-utc="{{ guild.current_period_end or '' }}" data-empty="-">{{ guild.current_period_end or '-' }}</span><br>
+            <strong>Trial Ends:</strong> {{ guild.trial_ends_at or '-' }}<br>
+            <strong>Current Period Ends:</strong> {{ guild.current_period_end or '-' }}<br>
             <strong>Last Payment:</strong>
-            {% if guild.last_payment_amount %}£{{ '%.2f'|format((guild.last_payment_amount or 0) / 100) }} {{ guild.last_payment_currency }} at <span data-utc="{{ guild.last_payment_at or '' }}" data-empty="-">{{ guild.last_payment_at or '-' }}</span>{% else %}No payments yet{% endif %}
+            {% if guild.last_payment_amount %}£{{ '%.2f'|format((guild.last_payment_amount or 0) / 100) }} {{ guild.last_payment_currency }} at {{ guild.last_payment_at }}{% else %}No payments yet{% endif %}
         </div>
 
         <form method="post" action="/site-admin/guild/{{ guild.id }}">
@@ -127,6 +127,9 @@
             </form>
             {% endif %}
             <a class="btn" href="/billing/checkout/{{ guild.id }}">Open Stripe Checkout</a>
+            <form method="post" action="/site-admin/guild/{{ guild.id }}/stripe-sync">
+                <button type="submit">Sync Stripe Billing</button>
+            </form>
         </div>
         <p class="muted">Manual activation lets you trial features or keep your own guild active without Stripe payment.</p>
     </div>
@@ -163,7 +166,7 @@
                 <tbody>
                     {% for p in payments %}
                     <tr>
-                        <td><span data-utc="{{ p.created_at or '' }}" data-empty="-">{{ p.created_at or '-' }}</span></td>
+                        <td>{{ p.created_at }}</td>
                         <td>{{ p.event_type }}</td>
                         <td>{{ p.status }}</td>
                         <td>{% if p.amount %}£{{ '%.2f'|format((p.amount or 0) / 100) }} {{ p.currency }}{% else %}-{% endif %}</td>

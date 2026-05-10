@@ -68,7 +68,7 @@
                             <td>{{ "{:,}".format(member.edm or 0) }}</td>
                             <td>{% if member.kingdom_limit %}K{{ member.kingdom_limit }}{% else %}-{% endif %}</td>
                             <td><span class="reason">{{ member.removal_reason }}</span></td>
-                            <td>{{ member.removed_at }}</td>
+                            <td><span data-utc="{{ member.removed_at or '' }}" data-empty="-">{{ member.removed_at or '-' }}</span></td>
                             <td>{{ member.removal_notes or "-" }}</td>
                             <td>
                                 <div class="actions">

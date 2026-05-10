@@ -171,7 +171,7 @@
         <div class="info-grid">
             <div class="card">
                 <div class="label">Generated</div>
-                <div class="value" style="font-size:18px;">{{ report.generated_at }}</div>
+                <div class="value" style="font-size:18px;"><span data-utc="{{ report.generated_at or '' }}" data-empty="-">{{ report.generated_at or '-' }}</span></div>
             </div>
             <div class="card">
                 <div class="label">Pass Score</div>

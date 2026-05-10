@@ -85,12 +85,12 @@
                             {% endif %}
                         </td>
                         <td><strong>{{ g.plan_label }}</strong><br><span class="muted">{{ g.plan_price }}</span></td>
-                        <td>{{ g.trial_ends_at or '-' }}</td>
-                        <td>{{ g.current_period_end or '-' }}</td>
+                        <td><span data-utc="{{ g.trial_ends_at or '' }}" data-empty="-">{{ g.trial_ends_at or '-' }}</span></td>
+                        <td><span data-utc="{{ g.current_period_end or '' }}" data-empty="-">{{ g.current_period_end or '-' }}</span></td>
                         <td>
                             {% if g.last_payment_amount %}
                                 £{{ '%.2f'|format((g.last_payment_amount or 0) / 100) }}<br>
-                                <span class="muted">{{ g.last_payment_at }}</span>
+                                <span class="muted"><span data-utc="{{ g.last_payment_at or '' }}" data-empty="-">{{ g.last_payment_at or '-' }}</span></span>
                             {% else %}
                                 <span class="muted">No payments</span>
                             {% endif %}
@@ -101,7 +101,7 @@
                             Admin: <span class="password-cell">{{ g.admin_password_plain or 'Not stored' }}</span>
                         </td>
                         <td>{{ g.member_count }}</td>
-                        <td>{{ g.created_at }}</td>
+                        <td><span data-utc="{{ g.created_at or '' }}" data-empty="-">{{ g.created_at or '-' }}</span></td>
                         <td>
                             <a class="btn" href="/site-admin/guild/{{ g.id }}">Manage</a>
                             <a class="btn" href="/site-admin/impersonate/{{ g.id }}">Open</a>

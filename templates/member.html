@@ -390,7 +390,7 @@
                     <tr>
                         <td>{{ row.old_name }}</td>
                         <td>{{ row.new_name }}</td>
-                        <td>{{ row.changed_at }}</td>
+                        <td><span data-utc="{{ row.changed_at or '' }}" data-empty="-">{{ row.changed_at or '-' }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -415,7 +415,7 @@
                 <tbody>
                     {% for row in kill_history %}
                     <tr>
-                        <td>{{ row.generated_at }}</td>
+                        <td><span data-utc="{{ row.generated_at or '' }}" data-empty="-">{{ row.generated_at or '-' }}</span></td>
                         <td>{{ row.player_name }}</td>
                         <td>
                             {% if row.overall_pass == 1 %}
@@ -450,7 +450,7 @@
                 <tbody>
                     {% for row in guild_fest_history %}
                     <tr>
-                        <td>{{ row.generated_at }}</td>
+                        <td><span data-utc="{{ row.generated_at or '' }}" data-empty="-">{{ row.generated_at or '-' }}</span></td>
                         <td>{{ row.report_name }}</td>
                         <td>
                             {% if row.passed == 1 %}

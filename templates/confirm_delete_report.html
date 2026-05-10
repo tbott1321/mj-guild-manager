@@ -33,7 +33,7 @@
 
             <div class="meta">
                 <strong>Report:</strong> {{ report.report_name }}<br>
-                <strong>Generated:</strong> {{ report.generated_at }}
+                <strong>Generated:</strong> <span data-utc="{{ report.generated_at or '' }}" data-empty="-">{{ report.generated_at or '-' }}</span>
             </div>
 
             <form action="/reports/delete/{{ report_type }}/{{ report.id }}" method="post">

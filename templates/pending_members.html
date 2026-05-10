@@ -330,7 +330,7 @@
                                 <td class="num {% if row.kills_above %}above{% else %}below{% endif %}">{{ "{:+,.0f}".format(row.kills_diff or 0) }}</td>
                                 <td class="num">{{ "{:,}".format(member.edm or 0) }}</td>
                                 <td class="num {% if row.edm_above %}above{% else %}below{% endif %}">{{ "{:+,.0f}".format(row.edm_diff or 0) }}</td>
-                                <td class="imported-date">{{ member.imported_at }}</td>
+                                <td class="imported-date"><span data-utc="{{ member.imported_at or '' }}" data-empty="-">{{ member.imported_at or '-' }}</span></td>
                                 <td>
                                     <div class="actions">
                                         <button class="btn approve" type="submit" name="single_approve" value="{{ member.id }}">Approve</button>
@@ -368,7 +368,7 @@
                                 <td class="num">{{ "{:,}".format(member.might or 0) }}</td>
                                 <td class="num">{{ "{:,}".format(member.kills or 0) }}</td>
                                 <td class="num">{{ "{:,}".format(member.edm or 0) }}</td>
-                                <td class="imported-date">{{ member.imported_at }}</td>
+                                <td class="imported-date"><span data-utc="{{ member.imported_at or '' }}" data-empty="-">{{ member.imported_at or '-' }}</span></td>
                                 <td>
                                     <div class="actions">
                                         <button class="btn approve" type="submit" name="single_approve" value="{{ member.id }}">Approve</button>

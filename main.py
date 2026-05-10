@@ -5,7 +5,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
 import sqlite3
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import os
 import shutil
@@ -135,11 +135,18 @@ def is_site_admin(request: Request):
 
 
 
+def utc_now_str():
+    """Return a UTC timestamp stored as naive text for SQLite.
+    Browser templates render these values in each user's local time.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def dt_from_unix(value):
     if not value:
         return None
     try:
-        return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return None
 
@@ -233,7 +240,7 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
 
     # If Stripe has a live/trial subscription but dates are delayed/missing, keep a local ETA visible.
     if status == "trialing" and not trial_ends_at:
-        trial_ends_at = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
+        trial_ends_at = (datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
     if status in {"trialing", "active"} and not current_period_end:
         current_period_end = trial_ends_at or guild["current_period_end"]
 
@@ -254,7 +261,7 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
         status,
         trial_ends_at or "",
         current_period_end or "",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        utc_now_str(),
         guild_id
     ))
     return True
@@ -264,7 +271,7 @@ def activate_guild_after_checkout(conn, guild_id, customer_id="", subscription_i
     Mark a completed Stripe Checkout as accessible immediately, then enrich it from Stripe.
     If Stripe subscription retrieval is delayed, we still set a local 14-day trial ETA.
     """
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     fallback_trial_end = (now + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
 
     conn.execute("""
@@ -362,7 +369,7 @@ def record_payment_event(conn, guild_id, event_type, status="", amount=None, cur
         stripe_event_id or "",
         stripe_invoice_id or "",
         stripe_subscription_id or "",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        utc_now_str(),
     ))
 
 
@@ -736,7 +743,7 @@ def init_db():
         if not column_exists(conn, "members", col):
             c.execute(f"ALTER TABLE members ADD COLUMN {col} {definition}")
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
 
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank IS NULL OR TRIM(rank) = ''")
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank = 'R1'")
@@ -834,13 +841,13 @@ def log_name_change(conn, guild_id, igg_id, old, new):
         conn.execute("""
             INSERT INTO name_history (guild_id, igg_id, old_name, new_name, changed_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (guild_id, igg_id, old, new, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        """, (guild_id, igg_id, old, new, utc_now_str()))
 
 
 def create_current_roster_snapshot(guild_id: int, snapshot_name=None, source_filename="Auto roster snapshot"):
     conn = get_conn()
     c = conn.cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
 
     if snapshot_name is None:
         snapshot_name = f"Manual Roster Snapshot {now}"
@@ -1273,7 +1280,7 @@ def create_guild(
         return templates.TemplateResponse(request, "create_guild.html", {"error": "Email addresses do not match.", "plans": BILLING_PLANS}, status_code=400)
     if not guild_password or not admin_password:
         return templates.TemplateResponse(request, "create_guild.html", {"error": "Guild and admin passwords are required.", "plans": BILLING_PLANS}, status_code=400)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
     conn = get_conn()
     try:
         c = conn.cursor()
@@ -1351,7 +1358,7 @@ def billing_checkout(request: Request, guild_id: int):
             customer_id = customer.id
             conn.execute(
                 "UPDATE guilds SET stripe_customer_id = ?, updated_at = ? WHERE id = ?",
-                (customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
+                (customer_id, utc_now_str(), guild_id)
             )
             conn.commit()
 
@@ -1375,7 +1382,7 @@ def billing_checkout(request: Request, guild_id: int):
                 stripe_checkout_session_id = ?,
                 updated_at = ?
             WHERE id = ?
-        """, (price_id, checkout_session.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
+        """, (price_id, checkout_session.id, utc_now_str(), guild_id))
         conn.commit()
         conn.close()
         return RedirectResponse(url=checkout_session.url, status_code=303)
@@ -1588,7 +1595,7 @@ async def stripe_webhook(request: Request):
                     status,
                     dt_from_unix(sub.get("trial_end")),
                     dt_from_unix(sub.get("current_period_end")),
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    utc_now_str(),
                     int(guild_id)
                 ))
                 record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription updated", event_id, "", sub.get("id") or "")
@@ -1603,7 +1610,7 @@ async def stripe_webhook(request: Request):
                         current_period_end = ?,
                         updated_at = ?
                     WHERE id = ?
-                """, (dt_from_unix(sub.get("current_period_end")), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
+                """, (dt_from_unix(sub.get("current_period_end")), utc_now_str(), int(guild_id)))
                 record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event_id, "", sub.get("id") or "")
 
         elif event_type in ("invoice.paid", "invoice.payment_succeeded"):
@@ -1623,7 +1630,7 @@ async def stripe_webhook(request: Request):
                         last_payment_currency = ?,
                         updated_at = ?
                     WHERE id = ?
-                """, (subscription_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), amount, currency.upper(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
+                """, (subscription_id, utc_now_str(), amount, currency.upper(), utc_now_str(), guild["id"]))
                 if subscription_id:
                     sync_guild_subscription_from_stripe(conn, guild["id"], subscription_id=subscription_id, customer_id=customer_id, fallback_status="active")
                 record_payment_event(conn, guild["id"], event_type, "paid", amount, currency, "Invoice paid", event_id, invoice.get("id") or "", subscription_id)
@@ -1638,7 +1645,7 @@ async def stripe_webhook(request: Request):
                     SET subscription_status = 'past_due',
                         updated_at = ?
                     WHERE id = ?
-                """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
+                """, (utc_now_str(), guild["id"]))
                 record_payment_event(conn, guild["id"], event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
 
         conn.commit()
@@ -1730,7 +1737,7 @@ def site_admin_edit_guild(
         return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
     plan = get_billing_plan(stripe_plan)
     updates = ["email = ?", "billing_email = ?", "stripe_plan = ?", "stripe_price_id = ?", "disabled_reason = ?", "updated_at = ?"]
-    values = [email.strip(), (billing_email or email).strip(), stripe_plan, plan["price_id"], disabled_reason.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+    values = [email.strip(), (billing_email or email).strip(), stripe_plan, plan["price_id"], disabled_reason.strip(), utc_now_str()]
     if subscription_status.strip():
         updates.append("subscription_status = ?")
         values.append(subscription_status.strip())
@@ -1786,7 +1793,7 @@ def site_admin_manual_activate_guild(request: Request, guild_id: int, manual_acc
             subscription_status = 'manual_active',
             updated_at = ?
         WHERE id = ?
-    """, (manual_access_reason.strip() or "Manual access granted by site admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
+    """, (manual_access_reason.strip() or "Manual access granted by site admin", utc_now_str(), guild_id))
     record_payment_event(conn, guild_id, "manual.activate", "manual_active", None, "GBP", manual_access_reason.strip() or "Manual access granted by site admin")
     conn.commit()
     conn.close()
@@ -1805,7 +1812,7 @@ def site_admin_manual_deactivate_guild(request: Request, guild_id: int):
             subscription_status = CASE WHEN stripe_subscription_id IS NULL OR TRIM(stripe_subscription_id) = '' THEN 'pending_billing' ELSE subscription_status END,
             updated_at = ?
         WHERE id = ?
-    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
+    """, (utc_now_str(), guild_id))
     record_payment_event(conn, guild_id, "manual.deactivate", "pending_billing", None, "GBP", "Manual access removed by site admin")
     conn.commit()
     conn.close()
@@ -1819,7 +1826,7 @@ def site_admin_disable_guild(request: Request, guild_id: int, disabled_reason: s
     conn = get_conn()
     conn.execute(
         "UPDATE guilds SET is_disabled = 1, disabled_reason = ?, updated_at = ? WHERE id = ?",
-        (disabled_reason.strip() or "Disabled by site admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
+        (disabled_reason.strip() or "Disabled by site admin", utc_now_str(), guild_id)
     )
     conn.commit()
     conn.close()
@@ -1833,7 +1840,7 @@ def site_admin_enable_guild(request: Request, guild_id: int):
     conn = get_conn()
     conn.execute(
         "UPDATE guilds SET is_disabled = 0, disabled_reason = '', updated_at = ? WHERE id = ?",
-        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
+        (utc_now_str(), guild_id)
     )
     conn.commit()
     conn.close()
@@ -2149,7 +2156,7 @@ def pending_members_page(request: Request):
 
 
 def approve_pending_member_row(c, guild_id: int, pending):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
     c.execute("""
         INSERT OR REPLACE INTO members
         (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, alt_account, troop_comp,
@@ -2177,7 +2184,7 @@ def approve_pending_member(request: Request, pending_id: int):
         conn.close()
         return HTMLResponse("<h2>Pending member not found</h2>", status_code=404)
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
 
     c.execute("""
         INSERT OR REPLACE INTO members
@@ -2378,7 +2385,7 @@ def edit_member(
     """, (
         name, rank, might, kills, edm, mana, sigils, kingdom_limit,
         alt_account_value, troop_comp, communication_method, whatsapp_number, discord_username,
-        comments, existing_watchlist, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id, guild_id
+        comments, existing_watchlist, utc_now_str(), igg_id, guild_id
     ))
 
     conn.commit()
@@ -2429,7 +2436,7 @@ def archive_individual_member(
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
-    removed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    removed_at = utc_now_str()
 
     c.execute("""
         INSERT INTO former_members
@@ -2483,7 +2490,7 @@ def restore_former_member(request: Request, former_id: int):
         conn.close()
         return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
 
     c.execute("""
         INSERT OR REPLACE INTO members
@@ -2560,7 +2567,7 @@ def toggle_watchlist(request: Request, igg_id: str, watchlist_flag: int = Form(.
     conn = get_conn()
     conn.execute(
         "UPDATE members SET watchlist_flag = ?, updated_at = ? WHERE igg_id = ? AND guild_id = ?",
-        (1 if int(watchlist_flag) == 1 else 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id, guild_id)
+        (1 if int(watchlist_flag) == 1 else 0, utc_now_str(), igg_id, guild_id)
     )
     conn.commit()
     conn.close()
@@ -2929,7 +2936,7 @@ def read_guild_stats_upload(file: UploadFile):
 
 def create_import_preview(conn, guild_id: int, source_filename: str, rows: list[dict]):
     token = secrets.token_urlsafe(24)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
     c = conn.cursor()
 
     c.execute("""
@@ -3013,7 +3020,7 @@ def get_import_preview(conn, guild_id: int, token: str):
 
 
 def apply_import_preview(conn, guild_id: int, preview, rows):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = utc_now_str()
     c = conn.cursor()
     snapshot_name = f"Guild Stats {now}"
     c.execute("""
@@ -3297,7 +3304,7 @@ def create_kill_report(
     avg_kills = round(sum(r["kill_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
     avg_edm = round(sum(r["edm_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
     avg_edm_pk = round(sum(r["edm_per_kill"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    generated_at = utc_now_str()
 
     c.execute("""
         INSERT INTO kill_reports
@@ -3378,7 +3385,7 @@ async def create_guild_fest_report(request: Request, report_name: str = Form(...
     guild_id = require_guild(request)
     conn = get_conn()
     c = conn.cursor()
-    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    generated_at = utc_now_str()
 
     c.execute("SELECT name FROM members WHERE guild_id = ?", (guild_id,))
     active_names = {str(row["name"]).strip().lower(): row["name"] for row in c.fetchall() if row["name"]}
