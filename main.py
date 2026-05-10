@@ -55,9 +55,9 @@ DEFAULT_MJ_ADMIN_PASSWORD = os.getenv("DEFAULT_MJ_ADMIN_PASSWORD", "admin123")
 
 # Stripe billing configuration
 # Create these as recurring Stripe Prices:
-# - monthly: £9.99 / month
-# - six_month: £49.99 / 6 months
-# - twelve_month: £84.99 / 12 months
+# - monthly: £4.99 / month
+# - six_month: £26.99 / 6 months
+# - twelve_month: £47.99 / 12 months
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_MONTHLY_ID = os.getenv("STRIPE_PRICE_MONTHLY_ID", "") or os.getenv("STRIPE_PRICE_MONTHLY", "")
@@ -71,19 +71,19 @@ if STRIPE_SECRET_KEY:
 BILLING_PLANS = {
     "monthly": {
         "label": "Monthly",
-        "display_price": "£9.99 / month",
+        "display_price": "£4.99 / month",
         "price_id_env": "STRIPE_PRICE_MONTHLY_ID",
         "price_id": STRIPE_PRICE_MONTHLY_ID,
     },
     "six_month": {
         "label": "6 Months",
-        "display_price": "£49.99 / 6 months",
+        "display_price": "£26.99 / 6 months",
         "price_id_env": "STRIPE_PRICE_6_MONTH_ID",
         "price_id": STRIPE_PRICE_6_MONTH_ID,
     },
     "twelve_month": {
         "label": "12 Months",
-        "display_price": "£84.99 / 12 months",
+        "display_price": "£47.99 / 12 months",
         "price_id_env": "STRIPE_PRICE_12_MONTH_ID",
         "price_id": STRIPE_PRICE_12_MONTH_ID,
     },
