@@ -171,8 +171,13 @@ def get_nested_stripe_price_id(subscription_data):
 
 def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", customer_id="", fallback_status="trialing"):
     """
-    Pull the live subscription from Stripe and persist the status/trial/billing dates.
-    This prevents checkout/webhook timing delays from leaving a paid/trial guild stuck as pending_billing.
+    Pull the live subscription from Stripe and persist status/trial/billing dates.
+
+    This version is deliberately safe for multi-guild billing emails:
+    - uses stored subscription_id when available
+    - otherwise uses stored customer_id
+    - never matches subscriptions by email, because one person may pay for multiple guilds
+    - works even if the webhook or success return did not update the database, as long as the guild has a Stripe customer/subscription saved
     """
     if not STRIPE_SECRET_KEY:
         return False
@@ -183,15 +188,33 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
 
     subscription_id = subscription_id or guild["stripe_subscription_id"] or ""
     customer_id = customer_id or guild["stripe_customer_id"] or ""
-
-    if not subscription_id and customer_id:
+    def choose_subscription_from_customer(cid):
+        if not cid:
+            return ""
         try:
-            subscriptions = stripe.Subscription.list(customer=customer_id, status="all", limit=1)
+            subscriptions = stripe.Subscription.list(customer=cid, status="all", limit=10)
             subs = stripe_safe_dict(subscriptions).get("data", [])
-            if subs:
-                subscription_id = stripe_safe_dict(subs[0]).get("id") or ""
+            if not subs:
+                return ""
+
+            # Prefer a usable subscription over older/cancelled records.
+            priority = {
+                "trialing": 0,
+                "active": 1,
+                "past_due": 2,
+                "unpaid": 3,
+                "incomplete": 4,
+                "canceled": 9,
+            }
+            subs = [stripe_safe_dict(x) for x in subs]
+            subs.sort(key=lambda x: (priority.get(x.get("status") or "", 5), -(x.get("created") or 0)))
+            return subs[0].get("id") or ""
         except Exception:
-            subscription_id = ""
+            return ""
+
+    # 1) If we have a customer but not a subscription, find the customer's subscription.
+    if not subscription_id and customer_id:
+        subscription_id = choose_subscription_from_customer(customer_id)
 
     if not subscription_id:
         return False
@@ -206,6 +229,13 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
     trial_ends_at = dt_from_unix(sub.get("trial_end"))
     current_period_end = dt_from_unix(sub.get("current_period_end"))
     stripe_price_id = get_nested_stripe_price_id(sub) or guild["stripe_price_id"]
+    resolved_customer_id = customer_id or sub.get("customer") or guild["stripe_customer_id"] or ""
+
+    # If Stripe has a live/trial subscription but dates are delayed/missing, keep a local ETA visible.
+    if status == "trialing" and not trial_ends_at:
+        trial_ends_at = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
+    if status in {"trialing", "active"} and not current_period_end:
+        current_period_end = trial_ends_at or guild["current_period_end"]
 
     conn.execute("""
         UPDATE guilds
@@ -213,24 +243,23 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
             stripe_subscription_id = COALESCE(NULLIF(?, ''), stripe_subscription_id),
             stripe_price_id = COALESCE(NULLIF(?, ''), stripe_price_id),
             subscription_status = ?,
-            trial_ends_at = ?,
-            current_period_end = ?,
+            trial_ends_at = COALESCE(NULLIF(?, ''), trial_ends_at),
+            current_period_end = COALESCE(NULLIF(?, ''), current_period_end),
             updated_at = ?
         WHERE id = ?
     """, (
-        customer_id or sub.get("customer") or "",
+        resolved_customer_id,
         sub.get("id") or subscription_id or "",
         stripe_price_id or "",
         status,
-        trial_ends_at,
-        current_period_end,
+        trial_ends_at or "",
+        current_period_end or "",
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         guild_id
     ))
     return True
 
-
-def activate_guild_after_checkout(conn, guild_id, customer_id="", subscription_id=""):
+def activate_guild_after_checkout(conn, guild_id, customer_id="", subscription_id="", checkout_session_id=""):
     """
     Mark a completed Stripe Checkout as accessible immediately, then enrich it from Stripe.
     If Stripe subscription retrieval is delayed, we still set a local 14-day trial ETA.
@@ -242,6 +271,7 @@ def activate_guild_after_checkout(conn, guild_id, customer_id="", subscription_i
         UPDATE guilds
         SET stripe_customer_id = COALESCE(NULLIF(?, ''), stripe_customer_id),
             stripe_subscription_id = COALESCE(NULLIF(?, ''), stripe_subscription_id),
+            stripe_checkout_session_id = COALESCE(NULLIF(?, ''), stripe_checkout_session_id),
             subscription_status = 'trialing',
             trial_ends_at = COALESCE(NULLIF(trial_ends_at, ''), ?),
             current_period_end = COALESCE(NULLIF(current_period_end, ''), ?),
@@ -250,6 +280,7 @@ def activate_guild_after_checkout(conn, guild_id, customer_id="", subscription_i
     """, (
         customer_id or "",
         subscription_id or "",
+        checkout_session_id or "",
         fallback_trial_end,
         fallback_trial_end,
         now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -412,6 +443,7 @@ def init_db():
         "billing_email": "TEXT",
         "stripe_customer_id": "TEXT",
         "stripe_subscription_id": "TEXT",
+        "stripe_checkout_session_id": "TEXT",
         "stripe_price_id": "TEXT",
         "subscription_status": "TEXT DEFAULT 'not_started'",
         "trial_ends_at": "TEXT",
@@ -1340,9 +1372,10 @@ def billing_checkout(request: Request, guild_id: int):
             UPDATE guilds
             SET subscription_status = 'pending_billing',
                 stripe_price_id = ?,
+                stripe_checkout_session_id = ?,
                 updated_at = ?
             WHERE id = ?
-        """, (price_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
+        """, (price_id, checkout_session.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
         conn.commit()
         conn.close()
         return RedirectResponse(url=checkout_session.url, status_code=303)
@@ -1359,18 +1392,35 @@ def billing_success(request: Request, session_id: str = ""):
 
     if session_id and STRIPE_SECRET_KEY:
         try:
-            session = stripe.checkout.Session.retrieve(session_id)
+            session = stripe.checkout.Session.retrieve(session_id, expand=["subscription", "customer"])
             session_data = stripe_safe_dict(session)
+            checkout_session_id = session_data.get("id") or session_id or ""
 
             metadata = session_data.get("metadata") or {}
             guild_id = metadata.get("guild_id")
             customer_id = session_data.get("customer") or ""
-            subscription_id = session_data.get("subscription") or ""
+            subscription_obj = session_data.get("subscription") or ""
+            if isinstance(subscription_obj, dict):
+                subscription_id = subscription_obj.get("id") or ""
+            else:
+                subscription_id = subscription_obj or ""
+
+            if not guild_id and checkout_session_id:
+                lookup_conn = get_conn()
+                row = lookup_conn.execute("SELECT id FROM guilds WHERE stripe_checkout_session_id = ?", (checkout_session_id,)).fetchone()
+                lookup_conn.close()
+                guild_id = row["id"] if row else None
+
+            if not guild_id and customer_id:
+                lookup_conn = get_conn()
+                row = lookup_conn.execute("SELECT id FROM guilds WHERE stripe_customer_id = ?", (customer_id,)).fetchone()
+                lookup_conn.close()
+                guild_id = row["id"] if row else None
 
             if guild_id:
                 guild_id = int(guild_id)
                 conn = get_conn()
-                activate_guild_after_checkout(conn, guild_id, customer_id=customer_id, subscription_id=subscription_id)
+                activate_guild_after_checkout(conn, guild_id, customer_id=customer_id, subscription_id=subscription_id, checkout_session_id=checkout_session_id)
                 record_payment_event(conn, guild_id, "checkout.success_return", "trialing", None, "GBP", "Checkout success return", "", "", subscription_id or "")
                 conn.commit()
                 conn.close()
@@ -1515,7 +1565,7 @@ async def stripe_webhook(request: Request):
             if guild_id:
                 subscription_id = data.get("subscription") or ""
                 customer_id = data.get("customer") or ""
-                activate_guild_after_checkout(conn, int(guild_id), customer_id=customer_id, subscription_id=subscription_id)
+                activate_guild_after_checkout(conn, int(guild_id), customer_id=customer_id, subscription_id=subscription_id, checkout_session_id=(data.get("id") or ""))
                 record_payment_event(conn, int(guild_id), event_type, "trialing", None, "GBP", "Checkout completed", event_id, "", subscription_id or "")
 
         elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
@@ -1526,6 +1576,7 @@ async def stripe_webhook(request: Request):
                 conn.execute("""
                     UPDATE guilds
                     SET stripe_subscription_id = ?,
+                        stripe_customer_id = COALESCE(NULLIF(?, ''), stripe_customer_id),
                         subscription_status = ?,
                         trial_ends_at = ?,
                         current_period_end = ?,
@@ -1533,6 +1584,7 @@ async def stripe_webhook(request: Request):
                     WHERE id = ?
                 """, (
                     sub.get("id"),
+                    sub.get("customer") or "",
                     status,
                     dt_from_unix(sub.get("trial_end")),
                     dt_from_unix(sub.get("current_period_end")),
@@ -1700,6 +1752,26 @@ def site_admin_edit_guild(
 
 
 
+
+
+
+@app.post("/site-admin/guild/{guild_id}/stripe-sync")
+def site_admin_stripe_sync_guild(request: Request, guild_id: int):
+    if not is_site_admin(request):
+        return RedirectResponse(url="/site-admin/login", status_code=302)
+
+    conn = get_conn()
+    try:
+        ok = sync_guild_subscription_from_stripe(conn, guild_id)
+        if ok:
+            record_payment_event(conn, guild_id, "manual.stripe_sync", "synced", None, "GBP", "Site admin manually synced billing from Stripe")
+        else:
+            record_payment_event(conn, guild_id, "manual.stripe_sync", "not_found", None, "GBP", "No Stripe subscription found for this guild")
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse(url=f"/site-admin/guild/{guild_id}", status_code=302)
 
 
 @app.post("/site-admin/guild/{guild_id}/manual-activate")
