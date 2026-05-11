@@ -5,7 +5,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
 import sqlite3
 import pandas as pd
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import os
 import shutil
@@ -55,9 +55,9 @@ DEFAULT_MJ_ADMIN_PASSWORD = os.getenv("DEFAULT_MJ_ADMIN_PASSWORD", "admin123")
 
 # Stripe billing configuration
 # Create these as recurring Stripe Prices:
-# - monthly: £4.99 / month
-# - six_month: £26.99 / 6 months
-# - twelve_month: £47.99 / 12 months
+# - monthly: £9.99 / month
+# - six_month: £49.99 / 6 months
+# - twelve_month: £84.99 / 12 months
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_MONTHLY_ID = os.getenv("STRIPE_PRICE_MONTHLY_ID", "") or os.getenv("STRIPE_PRICE_MONTHLY", "")
@@ -71,19 +71,19 @@ if STRIPE_SECRET_KEY:
 BILLING_PLANS = {
     "monthly": {
         "label": "Monthly",
-        "display_price": "£4.99 / month",
+        "display_price": "£9.99 / month",
         "price_id_env": "STRIPE_PRICE_MONTHLY_ID",
         "price_id": STRIPE_PRICE_MONTHLY_ID,
     },
     "six_month": {
         "label": "6 Months",
-        "display_price": "£26.99 / 6 months",
+        "display_price": "£49.99 / 6 months",
         "price_id_env": "STRIPE_PRICE_6_MONTH_ID",
         "price_id": STRIPE_PRICE_6_MONTH_ID,
     },
     "twelve_month": {
         "label": "12 Months",
-        "display_price": "£47.99 / 12 months",
+        "display_price": "£84.99 / 12 months",
         "price_id_env": "STRIPE_PRICE_12_MONTH_ID",
         "price_id": STRIPE_PRICE_12_MONTH_ID,
     },
@@ -135,18 +135,11 @@ def is_site_admin(request: Request):
 
 
 
-def utc_now_str():
-    """Return a UTC timestamp stored as naive text for SQLite.
-    Browser templates render these values in each user's local time.
-    """
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
-
 def dt_from_unix(value):
     if not value:
         return None
     try:
-        return datetime.fromtimestamp(int(value), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return None
 
@@ -240,7 +233,7 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
 
     # If Stripe has a live/trial subscription but dates are delayed/missing, keep a local ETA visible.
     if status == "trialing" and not trial_ends_at:
-        trial_ends_at = (datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
+        trial_ends_at = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
     if status in {"trialing", "active"} and not current_period_end:
         current_period_end = trial_ends_at or guild["current_period_end"]
 
@@ -261,7 +254,7 @@ def sync_guild_subscription_from_stripe(conn, guild_id, subscription_id="", cust
         status,
         trial_ends_at or "",
         current_period_end or "",
-        utc_now_str(),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         guild_id
     ))
     return True
@@ -271,7 +264,7 @@ def activate_guild_after_checkout(conn, guild_id, customer_id="", subscription_i
     Mark a completed Stripe Checkout as accessible immediately, then enrich it from Stripe.
     If Stripe subscription retrieval is delayed, we still set a local 14-day trial ETA.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     fallback_trial_end = (now + timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S")
 
     conn.execute("""
@@ -369,7 +362,7 @@ def record_payment_event(conn, guild_id, event_type, status="", amount=None, cur
         stripe_event_id or "",
         stripe_invoice_id or "",
         stripe_subscription_id or "",
-        utc_now_str(),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     ))
 
 
@@ -743,7 +736,7 @@ def init_db():
         if not column_exists(conn, "members", col):
             c.execute(f"ALTER TABLE members ADD COLUMN {col} {definition}")
 
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank IS NULL OR TRIM(rank) = ''")
     c.execute("UPDATE members SET rank = 'RANK1' WHERE rank = 'R1'")
@@ -841,13 +834,13 @@ def log_name_change(conn, guild_id, igg_id, old, new):
         conn.execute("""
             INSERT INTO name_history (guild_id, igg_id, old_name, new_name, changed_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (guild_id, igg_id, old, new, utc_now_str()))
+        """, (guild_id, igg_id, old, new, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
 
 def create_current_roster_snapshot(guild_id: int, snapshot_name=None, source_filename="Auto roster snapshot"):
     conn = get_conn()
     c = conn.cursor()
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if snapshot_name is None:
         snapshot_name = f"Manual Roster Snapshot {now}"
@@ -1280,7 +1273,7 @@ def create_guild(
         return templates.TemplateResponse(request, "create_guild.html", {"error": "Email addresses do not match.", "plans": BILLING_PLANS}, status_code=400)
     if not guild_password or not admin_password:
         return templates.TemplateResponse(request, "create_guild.html", {"error": "Guild and admin passwords are required.", "plans": BILLING_PLANS}, status_code=400)
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_conn()
     try:
         c = conn.cursor()
@@ -1358,7 +1351,7 @@ def billing_checkout(request: Request, guild_id: int):
             customer_id = customer.id
             conn.execute(
                 "UPDATE guilds SET stripe_customer_id = ?, updated_at = ? WHERE id = ?",
-                (customer_id, utc_now_str(), guild_id)
+                (customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
             )
             conn.commit()
 
@@ -1382,7 +1375,7 @@ def billing_checkout(request: Request, guild_id: int):
                 stripe_checkout_session_id = ?,
                 updated_at = ?
             WHERE id = ?
-        """, (price_id, checkout_session.id, utc_now_str(), guild_id))
+        """, (price_id, checkout_session.id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
         conn.commit()
         conn.close()
         return RedirectResponse(url=checkout_session.url, status_code=303)
@@ -1595,7 +1588,7 @@ async def stripe_webhook(request: Request):
                     status,
                     dt_from_unix(sub.get("trial_end")),
                     dt_from_unix(sub.get("current_period_end")),
-                    utc_now_str(),
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     int(guild_id)
                 ))
                 record_payment_event(conn, int(guild_id), event_type, status, None, (sub.get("currency") or "GBP"), "Subscription updated", event_id, "", sub.get("id") or "")
@@ -1610,7 +1603,7 @@ async def stripe_webhook(request: Request):
                         current_period_end = ?,
                         updated_at = ?
                     WHERE id = ?
-                """, (dt_from_unix(sub.get("current_period_end")), utc_now_str(), int(guild_id)))
+                """, (dt_from_unix(sub.get("current_period_end")), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(guild_id)))
                 record_payment_event(conn, int(guild_id), event_type, "canceled", None, (sub.get("currency") or "GBP"), "Subscription canceled", event_id, "", sub.get("id") or "")
 
         elif event_type in ("invoice.paid", "invoice.payment_succeeded"):
@@ -1630,7 +1623,7 @@ async def stripe_webhook(request: Request):
                         last_payment_currency = ?,
                         updated_at = ?
                     WHERE id = ?
-                """, (subscription_id, utc_now_str(), amount, currency.upper(), utc_now_str(), guild["id"]))
+                """, (subscription_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), amount, currency.upper(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
                 if subscription_id:
                     sync_guild_subscription_from_stripe(conn, guild["id"], subscription_id=subscription_id, customer_id=customer_id, fallback_status="active")
                 record_payment_event(conn, guild["id"], event_type, "paid", amount, currency, "Invoice paid", event_id, invoice.get("id") or "", subscription_id)
@@ -1645,7 +1638,7 @@ async def stripe_webhook(request: Request):
                     SET subscription_status = 'past_due',
                         updated_at = ?
                     WHERE id = ?
-                """, (utc_now_str(), guild["id"]))
+                """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild["id"]))
                 record_payment_event(conn, guild["id"], event_type, "failed", invoice.get("amount_due"), invoice.get("currency") or "GBP", "Invoice payment failed", event_id, invoice.get("id") or "", invoice.get("subscription") or "")
 
         conn.commit()
@@ -1737,7 +1730,7 @@ def site_admin_edit_guild(
         return HTMLResponse("<h2>Guild not found</h2>", status_code=404)
     plan = get_billing_plan(stripe_plan)
     updates = ["email = ?", "billing_email = ?", "stripe_plan = ?", "stripe_price_id = ?", "disabled_reason = ?", "updated_at = ?"]
-    values = [email.strip(), (billing_email or email).strip(), stripe_plan, plan["price_id"], disabled_reason.strip(), utc_now_str()]
+    values = [email.strip(), (billing_email or email).strip(), stripe_plan, plan["price_id"], disabled_reason.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
     if subscription_status.strip():
         updates.append("subscription_status = ?")
         values.append(subscription_status.strip())
@@ -1793,7 +1786,7 @@ def site_admin_manual_activate_guild(request: Request, guild_id: int, manual_acc
             subscription_status = 'manual_active',
             updated_at = ?
         WHERE id = ?
-    """, (manual_access_reason.strip() or "Manual access granted by site admin", utc_now_str(), guild_id))
+    """, (manual_access_reason.strip() or "Manual access granted by site admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
     record_payment_event(conn, guild_id, "manual.activate", "manual_active", None, "GBP", manual_access_reason.strip() or "Manual access granted by site admin")
     conn.commit()
     conn.close()
@@ -1812,7 +1805,7 @@ def site_admin_manual_deactivate_guild(request: Request, guild_id: int):
             subscription_status = CASE WHEN stripe_subscription_id IS NULL OR TRIM(stripe_subscription_id) = '' THEN 'pending_billing' ELSE subscription_status END,
             updated_at = ?
         WHERE id = ?
-    """, (utc_now_str(), guild_id))
+    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id))
     record_payment_event(conn, guild_id, "manual.deactivate", "pending_billing", None, "GBP", "Manual access removed by site admin")
     conn.commit()
     conn.close()
@@ -1826,7 +1819,7 @@ def site_admin_disable_guild(request: Request, guild_id: int, disabled_reason: s
     conn = get_conn()
     conn.execute(
         "UPDATE guilds SET is_disabled = 1, disabled_reason = ?, updated_at = ? WHERE id = ?",
-        (disabled_reason.strip() or "Disabled by site admin", utc_now_str(), guild_id)
+        (disabled_reason.strip() or "Disabled by site admin", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
     )
     conn.commit()
     conn.close()
@@ -1840,7 +1833,7 @@ def site_admin_enable_guild(request: Request, guild_id: int):
     conn = get_conn()
     conn.execute(
         "UPDATE guilds SET is_disabled = 0, disabled_reason = '', updated_at = ? WHERE id = ?",
-        (utc_now_str(), guild_id)
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), guild_id)
     )
     conn.commit()
     conn.close()
@@ -2156,7 +2149,7 @@ def pending_members_page(request: Request):
 
 
 def approve_pending_member_row(c, guild_id: int, pending):
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute("""
         INSERT OR REPLACE INTO members
         (guild_id, igg_id, name, rank, might, kills, edm, mana, sigils, kingdom_limit, alt_account, troop_comp,
@@ -2184,7 +2177,7 @@ def approve_pending_member(request: Request, pending_id: int):
         conn.close()
         return HTMLResponse("<h2>Pending member not found</h2>", status_code=404)
 
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
         INSERT OR REPLACE INTO members
@@ -2385,7 +2378,7 @@ def edit_member(
     """, (
         name, rank, might, kills, edm, mana, sigils, kingdom_limit,
         alt_account_value, troop_comp, communication_method, whatsapp_number, discord_username,
-        comments, existing_watchlist, utc_now_str(), igg_id, guild_id
+        comments, existing_watchlist, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id, guild_id
     ))
 
     conn.commit()
@@ -2436,7 +2429,7 @@ def archive_individual_member(
         conn.close()
         return HTMLResponse("<h2>Confirmation text did not match player name.</h2>", status_code=400)
 
-    removed_at = utc_now_str()
+    removed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
         INSERT INTO former_members
@@ -2490,7 +2483,7 @@ def restore_former_member(request: Request, former_id: int):
         conn.close()
         return HTMLResponse("<h2>Former member not found</h2>", status_code=404)
 
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
         INSERT OR REPLACE INTO members
@@ -2567,7 +2560,7 @@ def toggle_watchlist(request: Request, igg_id: str, watchlist_flag: int = Form(.
     conn = get_conn()
     conn.execute(
         "UPDATE members SET watchlist_flag = ?, updated_at = ? WHERE igg_id = ? AND guild_id = ?",
-        (1 if int(watchlist_flag) == 1 else 0, utc_now_str(), igg_id, guild_id)
+        (1 if int(watchlist_flag) == 1 else 0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), igg_id, guild_id)
     )
     conn.commit()
     conn.close()
@@ -2936,7 +2929,7 @@ def read_guild_stats_upload(file: UploadFile):
 
 def create_import_preview(conn, guild_id: int, source_filename: str, rows: list[dict]):
     token = secrets.token_urlsafe(24)
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c = conn.cursor()
 
     c.execute("""
@@ -3020,7 +3013,7 @@ def get_import_preview(conn, guild_id: int, token: str):
 
 
 def apply_import_preview(conn, guild_id: int, preview, rows):
-    now = utc_now_str()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c = conn.cursor()
     snapshot_name = f"Guild Stats {now}"
     c.execute("""
@@ -3304,7 +3297,7 @@ def create_kill_report(
     avg_kills = round(sum(r["kill_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
     avg_edm = round(sum(r["edm_increase"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
     avg_edm_pk = round(sum(r["edm_per_kill"] for r in report_rows) / len(report_rows), 2) if report_rows else 0
-    generated_at = utc_now_str()
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
         INSERT INTO kill_reports
@@ -3372,62 +3365,158 @@ async def create_guild_fest_report(request: Request, report_name: str = Form(...
     if not is_admin(request):
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    filename = (file.filename or "").lower()
-    df = pd.read_csv(file.file) if filename.endswith(".csv") else pd.read_excel(file.file)
-    df.columns = [str(c).strip() for c in df.columns]
-
-    required_columns = ["Name", "Completed", "Total", "Score", "Completed Bonus"]
-    missing = [col for col in required_columns if col not in df.columns]
-
-    if missing:
-        return HTMLResponse(f"<h2>Guild Fest import failed. Missing: {', '.join(missing)}</h2>", status_code=400)
-
     guild_id = require_guild(request)
+    if not guild_id:
+        return RedirectResponse(url="/", status_code=302)
+
+    filename = (file.filename or "").strip()
+    lower_filename = filename.lower()
+
+    def fail(message: str, status_code: int = 400):
+        safe_message = str(message).replace("<", "&lt;").replace(">", "&gt;")
+        return HTMLResponse(
+            f"""
+            <html>
+            <head><title>Guild Fest Report Error</title></head>
+            <body style="font-family:Segoe UI,Arial,sans-serif;padding:40px;background:#f3f4f6;color:#111827;">
+                <div style="max-width:760px;background:white;padding:28px;border-radius:18px;box-shadow:0 10px 24px rgba(15,23,42,.08);">
+                    <h2 style="margin-top:0;">Guild Fest report could not be generated</h2>
+                    <p style="line-height:1.6;color:#4b5563;">{safe_message}</p>
+                    <p style="line-height:1.6;color:#6b7280;">
+                        Expected columns are: <strong>Name</strong>, <strong>Completed</strong>, <strong>Total</strong>, <strong>Score</strong>, and <strong>Completed Bonus</strong>.
+                        Column names are flexible, but the file must contain equivalent data.
+                    </p>
+                    <a href="/reports/guildfest/create" style="display:inline-block;background:#312e81;color:white;padding:12px 16px;border-radius:12px;text-decoration:none;font-weight:700;">Back to Guild Fest Upload</a>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=status_code,
+        )
+
+    if not lower_filename.endswith((".xlsx", ".csv", ".xls")):
+        return fail("Unsupported file type. Please upload a .xlsx or .csv file.")
+
+    try:
+        if lower_filename.endswith(".csv"):
+            df = pd.read_csv(file.file)
+        elif lower_filename.endswith(".xls"):
+            return fail("Legacy .xls files are not supported on the server. Please save/export the spreadsheet as .xlsx or .csv and try again.")
+        else:
+            df = pd.read_excel(file.file, engine="openpyxl")
+    except Exception as e:
+        return fail(f"The spreadsheet could not be read. Please check the file is not password protected or corrupted, then save it as .xlsx or .csv and try again. Details: {e}")
+
+    if df is None or df.empty:
+        return fail("The uploaded spreadsheet is empty.")
+
+    # Normalise columns so small naming differences from exports do not cause crashes.
+    original_columns = [str(c).strip() for c in df.columns]
+    df.columns = original_columns
+
+    def normalise_col_name(value):
+        return re.sub(r"[^a-z0-9]+", "", str(value).strip().lower())
+
+    column_lookup = {normalise_col_name(col): col for col in df.columns}
+    aliases = {
+        "Name": ["name", "player", "playername", "member", "membername", "lordname"],
+        "Completed": ["completed", "complete", "questscompleted", "questcompleted"],
+        "Total": ["total", "questtotal", "quests", "totalquests"],
+        "Score": ["score", "points", "guildfestscore", "gfscore", "totalpoints"],
+        "Completed Bonus": ["completedbonus", "bonus", "completionbonus", "completedbonuspoints", "bonuspoints"],
+    }
+
+    resolved = {}
+    for canonical, names in aliases.items():
+        for name in names:
+            if name in column_lookup:
+                resolved[canonical] = column_lookup[name]
+                break
+
+    missing = [col for col in aliases if col not in resolved]
+    if missing:
+        return fail(
+            "Missing required column(s): " + ", ".join(missing) +
+            ". Found columns: " + (", ".join(original_columns) if original_columns else "none")
+        )
+
+    def safe_int(value, default=0):
+        if pd.isna(value):
+            return default
+        text = str(value).strip()
+        if text == "":
+            return default
+        text = text.replace(",", "")
+        # Handle values such as '1,234 pts', '1200.0', or '5/11'. For 5/11, use the first value.
+        if "/" in text:
+            text = text.split("/", 1)[0].strip()
+        match = re.search(r"-?\d+(?:\.\d+)?", text)
+        if not match:
+            return default
+        try:
+            return int(float(match.group(0)))
+        except Exception:
+            return default
+
     conn = get_conn()
     c = conn.cursor()
-    generated_at = utc_now_str()
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    c.execute("SELECT name FROM members WHERE guild_id = ?", (guild_id,))
-    active_names = {str(row["name"]).strip().lower(): row["name"] for row in c.fetchall() if row["name"]}
-    guild_fest_rows = []
+    try:
+        c.execute("SELECT name FROM members WHERE guild_id = ?", (guild_id,))
+        active_names = {str(row["name"]).strip().lower(): row["name"] for row in c.fetchall() if row["name"]}
+        guild_fest_rows = []
+        skipped_not_in_roster = 0
 
-    for _, row in df.iterrows():
-        player_name = "" if pd.isna(row["Name"]) else str(row["Name"]).strip()
-        if not player_name:
-            continue
+        for _, row in df.iterrows():
+            player_name = "" if pd.isna(row[resolved["Name"]]) else str(row[resolved["Name"]]).strip()
+            if not player_name:
+                continue
 
-        roster_name = active_names.get(player_name.lower())
-        if not roster_name:
-            continue
+            roster_name = active_names.get(player_name.lower())
+            if not roster_name:
+                skipped_not_in_roster += 1
+                continue
 
-        completed = 0 if pd.isna(row["Completed"]) else int(float(row["Completed"]))
-        total = 0 if pd.isna(row["Total"]) else int(float(row["Total"]))
-        score = 0 if pd.isna(row["Score"]) else int(float(row["Score"]))
-        completed_bonus = "" if pd.isna(row["Completed Bonus"]) else str(row["Completed Bonus"]).strip()
-        passed = int(score >= pass_score)
-        guild_fest_rows.append((roster_name, score, completed, total, completed_bonus, passed))
+            completed = safe_int(row[resolved["Completed"]])
+            total = safe_int(row[resolved["Total"]])
+            score = safe_int(row[resolved["Score"]])
+            completed_bonus = "" if pd.isna(row[resolved["Completed Bonus"]]) else str(row[resolved["Completed Bonus"]]).strip()
+            passed = int(score >= pass_score)
+            guild_fest_rows.append((roster_name, score, completed, total, completed_bonus, passed))
 
-    avg_score = round(sum(row[1] for row in guild_fest_rows) / len(guild_fest_rows), 2) if guild_fest_rows else 0
+        if not guild_fest_rows:
+            conn.close()
+            return fail(
+                "No rows matched current roster members. Check that the spreadsheet player names match the names currently saved in the guild roster. "
+                f"Rows skipped because they were not found in the roster: {skipped_not_in_roster}."
+            )
 
-    c.execute("""
-        INSERT INTO guild_fest_reports
-        (guild_id, report_name, generated_at, source_filename, pass_score, avg_score)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (guild_id, report_name, generated_at, file.filename, pass_score, avg_score))
+        avg_score = round(sum(row[1] for row in guild_fest_rows) / len(guild_fest_rows), 2)
 
-    report_id = c.lastrowid
-
-    for player_name, score, completed, total, completed_bonus, passed in guild_fest_rows:
         c.execute("""
-            INSERT INTO guild_fest_report_rows
-            (guild_id, report_id, player_name, guild_fest_score, completed, total, completed_bonus, passed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (guild_id, report_id, player_name, score, completed, total, completed_bonus, passed))
+            INSERT INTO guild_fest_reports
+            (guild_id, report_name, generated_at, source_filename, pass_score, avg_score)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (guild_id, report_name.strip(), generated_at, filename, pass_score, avg_score))
 
-    conn.commit()
+        report_id = c.lastrowid
+
+        for player_name, score, completed, total, completed_bonus, passed in guild_fest_rows:
+            c.execute("""
+                INSERT INTO guild_fest_report_rows
+                (guild_id, report_id, player_name, guild_fest_score, completed, total, completed_bonus, passed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (guild_id, report_id, player_name, score, completed, total, completed_bonus, passed))
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return fail(f"Unexpected server-side error while saving the Guild Fest report: {e}", status_code=500)
+
     conn.close()
     return RedirectResponse(url=f"/reports/guildfest/{report_id}", status_code=302)
-
 
 @app.get("/reports/guildfest/{report_id}", response_class=HTMLResponse)
 def view_guild_fest_report(request: Request, report_id: int):
