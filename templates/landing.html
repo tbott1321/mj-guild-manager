@@ -15,6 +15,30 @@
         .btn { display:block; text-align:center; text-decoration:none; padding:15px 18px; border-radius:14px; font-weight:800; }
         .primary { background:linear-gradient(135deg,#6366f1,#7c3aed); color:white; }
         .secondary { background:#eef2ff; color:#4338ca; }
+        .discord {
+            background:linear-gradient(135deg,#5865F2,#4752C4);
+            color:white;
+            border:1px solid rgba(255,255,255,.10);
+            box-shadow:0 10px 22px rgba(88,101,242,.18);
+            transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+        }
+        .discord:hover {
+            transform:translateY(-1px);
+            box-shadow:0 14px 28px rgba(88,101,242,.32);
+            filter:brightness(1.04);
+        }
+        .discord-note {
+            margin-top:16px;
+            padding:14px 16px;
+            border-radius:16px;
+            background:rgba(88,101,242,.12);
+            border:1px solid rgba(88,101,242,.25);
+            color:#dbe4ff;
+            font-size:14px;
+            line-height:1.6;
+            text-align:center;
+        }
+        .discord-note strong { color:white; }
         .site { color:#cbd5e1; text-align:center; display:block; margin-top:14px; font-size:13px; }
         .feature { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:16px; margin-top:14px; }
         @media(max-width:800px){ .wrap{grid-template-columns:1fr;} h1{font-size:34px;} }
@@ -34,6 +58,10 @@
             <div class="actions">
                 <a href="/guild/login" class="btn primary">Log in to Guild</a>
                 <a href="/guild/create" class="btn secondary">Create Guild</a>
+                <a href="https://discord.gg/568KJpnatk" class="btn discord" target="_blank" rel="noopener noreferrer">Join Community Discord</a>
+            </div>
+            <div class="discord-note">
+                <strong>Official support & update hub.</strong><br>Join the community Discord for support, update notes, feature previews, and announcements.
             </div>
             <a href="/site-admin/login" class="site">Site admin login</a>
         </div>
